@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { bridge, type Capture, type Sensor, type State } from "./bridge";
 import metadata from "../package.json";
+import TaskPanel from "./TaskPanel.vue";
+import ReplayPanel from "./ReplayPanel.vue";
 
 const state = ref<State>({
   simulation: true,
@@ -34,7 +36,7 @@ const phase = computed(() =>
     ? "service_error"
     : state.value.link?.phase || "disconnected",
 );
-const online = computed(() => phase.value === "online");
+const online = computed(() => phase.value === "online" && !state.value.replay);
 const phaseNames: Record<string, string> = {
   online: "模拟链路在线",
   disconnected: "尚未连接",
@@ -108,6 +110,9 @@ const events = computed(() =>
     ),
 );
 const latestOperation = computed(() => state.value.operations?.at(-1));
+watch(page, () => {
+  message.value = "";
+});
 const positionStyle = computed(() => {
   const s = sensor("position");
   const values = s.valid && Array.isArray(s.value) ? s.value : null;
@@ -222,6 +227,8 @@ onUnmounted(() => {
             ['overview', '◫', '监控总览'],
             ['protocol', '⌘', '协议详情'],
             ['logs', '≡', '事件日志'],
+            ['tasks', '▷', '模拟任务'],
+            ['replay', '◷', '只读回放'],
             ['roadmap', '↗', '后续路线'],
           ]"
           :key="item[0]"
@@ -234,9 +241,9 @@ onUnmounted(() => {
         </button>
       </nav>
       <div class="rail-bottom">
-        <span class="edition">S0–S1 · v{{ metadata.version }}</span>
+        <span class="edition">S2 · v{{ metadata.version }}</span>
         <p>自用与教学<br />Windows 桌面版</p>
-        <div class="readonly-dot">只读运行</div>
+        <div class="readonly-dot">仅本机模拟</div>
       </div>
     </aside>
     <main>
@@ -249,6 +256,8 @@ onUnmounted(() => {
                 overview: "监控总览",
                 protocol: "协议详情",
                 logs: "事件日志",
+                tasks: "模拟任务",
+                replay: "只读回放",
                 roadmap: "后续路线",
               }[page]
             }}
@@ -260,8 +269,9 @@ onUnmounted(() => {
         </div>
       </header>
       <div class="simulation-banner" data-testid="simulation-banner">
-        <span class="tag">模拟模式</span><strong>只读模拟版</strong
-        ><span>设备与图像均由本机生成 · 未连接真实飞机 · 飞行动作未开放</span>
+        <span class="tag">模拟模式</span
+        ><strong>{{ state.replay ? "只读历史回放" : "模拟任务预览版" }}</strong
+        ><span>设备、动作与图像均由本机模型生成 · 未连接真实飞机</span>
       </div>
       <div v-if="message" class="notice" role="status" data-testid="notice">
         {{ message
@@ -394,7 +404,12 @@ onUnmounted(() => {
             <div class="connection-buttons">
               <button
                 class="primary"
-                :disabled="busy || !serviceReady || phase !== 'disconnected'"
+                :disabled="
+                  busy ||
+                  !serviceReady ||
+                  !!state.replay ||
+                  phase !== 'disconnected'
+                "
                 @click="connectDevice"
               >
                 连接模拟设备
@@ -410,7 +425,7 @@ onUnmounted(() => {
             ><select
               id="scenario"
               v-model="scenario"
-              :disabled="busy || !serviceReady"
+              :disabled="busy || !serviceReady || !!state.replay"
               @change="changeScenario"
             >
               <option
@@ -465,14 +480,14 @@ onUnmounted(() => {
               <span>相机新鲜度</span><strong class="ambertext">未签认</strong>
             </div>
             <div class="qualification-row">
-              <span>允许控制</span><strong>否 · S1 只读</strong>
+              <span>允许实机控制</span><strong>否 · 实机未开放</strong>
             </div>
             <div class="boundary-note">
               链路在线与传感器有效，均不代表允许飞行。实机故障保护仍待固件和实物验证。
             </div>
             <button
               class="wide"
-              :disabled="!online || busy"
+              :disabled="!online || busy || state.task?.running"
               @click="queryProfile"
             >
               读取协议配置
@@ -504,7 +519,10 @@ onUnmounted(() => {
             <span class="section-number">01</span>
             <h2>协议与连接身份</h2>
           </div>
-          <button :disabled="!online || busy" @click="queryProfile">
+          <button
+            :disabled="!online || busy || state.task?.running"
+            @click="queryProfile"
+          >
             查询配置
           </button>
         </div>
@@ -534,7 +552,11 @@ onUnmounted(() => {
         </dl>
         <h3>
           模拟配置原始字段
-          <span class="chip amber">config_valid=0 / validated_mask=0</span>
+          <span class="chip amber">{{
+            state.task_fixture
+              ? "仅模型测试资格 · 非生产配置"
+              : "config_valid=0 / validated_mask=0"
+          }}</span>
         </h3>
         <pre data-testid="profile-json">{{
           state.profile
@@ -577,16 +599,26 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <TaskPanel v-if="page === 'tasks'" :state="state" :ready="serviceReady" />
+      <ReplayPanel
+        v-if="page === 'replay'"
+        :state="state"
+        :ready="serviceReady"
+      />
+
       <section v-show="page === 'roadmap'" class="panel detail-panel roadmap">
         <span class="eyebrow">分阶段交付 · 完整目标保留</span>
         <h2>从模拟监控到真实主线</h2>
-        <p>当前版本只交付 S0–S1。以下功能尚未完成，不代表实机或飞行验收。</p>
+        <p>
+          当前已交付模拟监控、模拟任务闭环与只读回放。S3–S5
+          尚未完成，不代表实机或飞行验收。
+        </p>
         <article
           v-for="item in [
             [
               'S2',
               '模拟任务闭环与回放',
-              '现场许可 → ACQUIRE → BEGIN → 动作；区分已接受与已完成，接管锁存，未知结果查询，只读回放。',
+              '本机示例：现场许可 → ACQUIRE → BEGIN → 模拟起飞/保持/降落；结果查询、接管锁存与只读回放。',
             ],
             [
               'S3',
@@ -611,11 +643,13 @@ onUnmounted(() => {
             <h3>{{ item[1] }}</h3>
             <p>{{ item[2] }}</p>
           </div>
-          <span class="chip">待实施</span>
+          <span class="chip">{{
+            item[0] === "S2" ? "本机模拟已实施" : "待实施"
+          }}</span>
         </article>
       </section>
       <footer>
-        <span>模拟模式 · 只读 · 离线本机运行</span
+        <span>模拟任务 / 只读回放 · 离线本机运行</span
         ><span>软件验证不代表真实 UART、相机、语音或飞行验收</span>
       </footer>
     </main>

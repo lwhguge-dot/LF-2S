@@ -44,7 +44,7 @@ def main():
     report = {
         "date": datetime.now().astimezone().isoformat(),
         "platform": platform.platform(),
-        "stage": "S0–S1",
+        "stage": "S0–S2",
         "version": VERSION,
         "backend": backend,
         "development_desktop_checks": len(dev["checks"]),
@@ -52,7 +52,7 @@ def main():
         "packaged_runtime": packaged["runtime"],
         "cleanup": cleanup,
         "passed": True,
-        "scope": "read-only synthetic localhost; no hardware/flight acceptance",
+        "scope": "synthetic loopback tasks and read-only replay; no hardware/flight acceptance",
     }
     (evidence / "acceptance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), "utf-8"
@@ -79,9 +79,9 @@ def main():
         if integrity["authority_checked"]
         else "独立仓库副本与清单哈希一致；本次未读取外部权威源"
     )
-    text = f"""# LF-2S 上位机 S0–S1 验收报告
+    text = f"""# LF-2S 上位机 S0–S2 验收报告
 
-日期：{datetime.now().astimezone().date()}。版本：{VERSION}。结论：本机只读模拟 Windows 桌面版已实现并验证；S2–S5 尚未完成。所有测试是软件/本机网络证据，没有连接飞机。
+日期：{datetime.now().astimezone().date()}。版本：{VERSION}。结论：本机模拟监控、任务闭环与只读回放已实现并验证；S3–S5 尚未完成。所有测试是软件/本机网络证据，没有连接飞机。
 
 ## 可运行产物
 
@@ -110,7 +110,9 @@ def main():
 - 实际渲染进程收到会话编号 `{session}`，超过 JavaScript 安全整数范围；与 `(boot_id<<32)|session_counter` 的精确值一致。nonce 同样大于 2^53；后端另覆盖 u64 最大值和 NaN/Inf 归一化。
 - 健康场景显示显式合成测量；未知场景返回 null；传感器停止更新时链路仍在线、测量单独过期；暂停网络超过 1000 ms 时链路、数字和图像失效。
 - 错误来源/协议指纹有中文拒绝原因，不刷新有效状态；模拟 FC 重启使旧配置失效，须显式重新连接。
-- 全部动作/权限接口不存在，传输出口只允许 HELLO/QUERY_PROFILE；重试原字节与同编号，次数有限；重连、刷新和后台重启不自动重发旧动作。
+- 默认监控只允许 HELLO/QUERY_PROFILE。显式模拟环境中经本次确认、PERMIT/ACQUIRE/BEGIN，实际执行模拟起飞/保持/降落并由新样本产生最终结果，END 与 RELEASE 后撤权。模拟测试资格不代表生产配置签认。
+- 传感器冻结、定位 reset、断链、重启、人工接管中断流程。人工锁存不因重连解除；空中人工状态可能按原协议拒绝 HELLO/BUSY。未知结果按原字节、原编号有限重试，之后仅查询原编号；最终结果不被迟到接受覆盖。
+- 回放时间轴定位与播放只读，打开时断开实时会话，后台拒绝实时连接/任务/场景/图像；退出不恢复旧动作。录制跨服务退出仍可读取，u64 保真。快照最多 2 Hz，单份 4 MiB、6 份保留，256 条队列，容量/丢弃策略有检查；图像仅元数据。
 - 合成 JPEG 在真实 Chromium 解码为 960×540；合成/过期标记常驻，hardware_freshness_qualified 保持 false。图像与配置查询并发验证通过。
 - 受限 preload、sandbox/contextIsolation、无 renderer Node、无外部资源请求、窄窗口、日志筛选展开、后续路线展示均验证。
 - 第二次启动不创建第二个后台；后台意外退出时旧数字隐藏；手动重启不恢复会话。最终目录包实际关闭 BrowserWindow，以及主进程立即 app.exit 的 EOF 清理均通过。
@@ -124,12 +126,15 @@ def main():
 - [断链过期](package-stale.png)
 - [协议日志展开](package-logs.png)
 - [窄窗口](package-compact.png)
+- [模拟任务进行中](package-task-active.png)
+- [模拟任务最终完成](package-task-completed.png)
+- [只读历史回放](package-replay.png)
 
 ## 明确未验收事项
 
 尚未交付 NSIS 安装/升级/卸载、数字签名、另一台干净 Windows 主机、真实 ESP32/STM32/UART/NRF、真实图像/采样新鲜度、语音/视觉模型、机载故障处置或飞行验收。System32 PATH 和页面 offline 检查不能代替这些项目。没有修改商家原件、现有协议权威源或 ESP-IDF hello_world。
 
-下一阶段为 S2 模拟任务闭环与只读回放；S3 真实主线；S4 独立图像、中文语音、视觉；S5 Mind+ 经有线手柄/NRF。详细入口在 `docs/03_验收与后续计划.md`。定位/高度失效时不能从本机状态提示推导“真实飞机一定悬停”。
+下一阶段为 S3 真实主线；S4 独立图像、中文语音、视觉；S5 Mind+ 经有线手柄/NRF。详细入口在 `docs/03_验收与后续计划.md`。定位/高度失效时不能从本机状态提示推导“真实飞机一定悬停”。
 """
     (evidence / "验收报告.md").write_text(text, "utf-8")
     print(

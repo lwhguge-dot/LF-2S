@@ -11,6 +11,7 @@ from lf2s_protocol.version import DIALECT_HASH, VERSION
 from lf2s_protocol.wire import ProtocolError, decode_datagram
 
 from service.serialization import clean, message_json
+from service.tasks import TERMINAL, TaskService
 from service.version import APPLICATION_VERSION
 from simulation.network import SCENARIOS, Simulation
 
@@ -41,6 +42,14 @@ class Adapter:
         self.last_reject = None
         self.link_label = None
         self.task = None
+        self.known_requests = {}
+        self.replaying = False
+        self.tasks = TaskService(self)
+        self.journal.context = lambda: {
+            "boot_id": str(self.client.boot) if self.client.boot else None,
+            "session_id": str(self.client.session) if self.client.session else None,
+            "client_nonce": str(self.client.nonce) if self.client.nonce else None,
+        }
 
     def now(self):
         return int((time.monotonic() - self.started) * 1000)
@@ -51,6 +60,7 @@ class Adapter:
         self.journal.add("service", "本地服务就绪；只读模拟模式，不连接飞机")
 
     def clear_session(self, reason):
+        self.tasks.interrupt(reason)
         for future in self.waiters.values():
             if not future.done():
                 future.set_exception(ProtocolError(reason))
@@ -61,6 +71,7 @@ class Adapter:
         self.profile = self.profile_at = self.query_request = None
         self.failure = None
         self.last_reject = None
+        self.known_requests.clear()
 
     def begin_operation(self, name):
         op_id = secrets.token_hex(6)
@@ -72,22 +83,33 @@ class Adapter:
             "request_msg": 60000,
             "reason": None,
         }
-        while len(self.operations) > 32:
+        while len(self.operations) > 96:
             self.operations.pop(next(iter(self.operations)))
         return self.operations[op_id]
 
     def transmit(self, raw, operation, retry=False):
         msg = decode_datagram(raw)
-        # No action / permission / lease / standard COMMAND_LONG can pass this boundary.
-        if msg.get_msgId() != 60000 or msg.op not in (1, 8):
-            raise ProtocolError("只读版本拒绝所有动作和控制权请求")
+        # No configurable destination, generic sender or COMMAND_LONG bypass.
+        if self.replaying:
+            raise ProtocolError("回放通道只读，禁止发送协议请求")
+        readonly = msg.get_msgId() == 60000 and msg.op in (1, 8)
+        simulated = self.sim.task_bench and (
+            (msg.get_msgId() == 60000 and msg.op in (2, 3, 4, 5, 6, 7))
+            or (msg.get_msgId() == 60001 and msg.op in (1, 2, 5, 6, 7, 8))
+        )
+        if not readonly and not simulated:
+            raise ProtocolError("仅允许只读请求及固定的本机模拟任务操作")
         operation["request_id"] = msg.request_id
+        operation["request_msg"] = msg.get_msgId()
         operation["boot_id"] = str(msg.boot_id)
         operation["session_id"] = str(msg.session_id)
+        self.known_requests[msg.request_id] = (raw, operation["operation_id"])
+        while len(self.known_requests) > 128:
+            self.known_requests.pop(next(iter(self.known_requests)))
         self.sent += 1
         self.journal.add(
             "tx",
-            "同编号只读重试" if retry else f"发送 {operation['name']}",
+            "原字节同编号重试" if retry else f"发送 {operation['name']}",
             operation_id=operation["operation_id"],
             request_id=msg.request_id,
             wire=message_json(msg),
@@ -96,6 +118,8 @@ class Adapter:
         self.sim.send(raw)
 
     async def connect(self):
+        if self.replaying:
+            raise ProtocolError("请先退出只读回放，再显式建立新会话")
         if self.connected:
             raise ProtocolError("请先断开，再创建新会话")
         self.clear_session("重新连接，旧会话已失效")
@@ -118,9 +142,10 @@ class Adapter:
         return op.copy()
 
     def disconnect(self):
+        self.tasks.interrupt("连接已断开")
         self.connected = False
         for op in self.operations.values():
-            if op["status"] == "pending":
+            if op["status"] in ("pending", "accepted", "in_progress"):
                 op.update(status="unknown", reason="连接已断开")
         self.clear_session("连接已断开，旧请求不重放")
         self.journal.add("connection", "已断开；旧会话和图像失效，不重放旧动作")
@@ -150,6 +175,28 @@ class Adapter:
             self.waiters.pop(request_id, None)
         return op.copy()
 
+    async def request_operation(self, name, *, action=False, on_created=None, **fields):
+        if not self.connected or self.replaying:
+            raise ProtocolError("未连接或正在只读回放")
+        op = self.begin_operation(name)
+        raw = (self.client.action if action else self.client.control)(
+            name, self.now(), **fields
+        )
+        request_id = self.client.request_id
+        future = asyncio.get_running_loop().create_future()
+        self.waiters[request_id] = future
+        self.transmit(raw, op)
+        if on_created:
+            on_created(op)
+        try:
+            await asyncio.wait_for(future, 1.5)
+        except (TimeoutError, ProtocolError) as exc:
+            if op["status"] not in TERMINAL:
+                op.update(status="unknown", reason=str(exc) or "协议结果未知")
+        finally:
+            self.waiters.pop(request_id, None)
+        return op
+
     def reject(self, reason):
         self.rejected += 1
         self.failure = reason
@@ -178,14 +225,20 @@ class Adapter:
                 if msg.sample_id <= self.client.sample:
                     return
             if mid == 60002:
-                item = self.client.pending.get(msg.request_id)
-                if item is None:
+                known = self.known_requests.get(msg.request_id)
+                if known is None:
                     return  # no unsolicited ACK may establish a session or satisfy an operation
-                req = decode_datagram(item["raw"])
+                req = decode_datagram(known[0])
                 if (msg.request_msg, msg.echo_op) != (req.get_msgId(), req.op):
                     raise ProtocolError("结果与原请求不匹配")
                 if req.op == 1 and msg.client_nonce != self.client.nonce:
-                    raise ProtocolError("HELLO 随机编号不匹配")
+                    if req.get_msgId() == 60000:
+                        raise ProtocolError("HELLO 随机编号不匹配")
+                if req.get_msgId() == 60001 and (
+                    msg.task_id != req.task_id
+                    or (msg.lease_id != req.lease_id and req.op != 7)
+                ):
+                    raise ProtocolError("动作结果的任务或租期与原请求不匹配")
             if mid == 60004:
                 if (
                     not self.client.session
@@ -234,38 +287,41 @@ class Adapter:
             elif mid in (30, 331):
                 self.telemetry[mid] = (msg, now)
             elif mid == 60002:
-                op = next(
-                    (
-                        o
-                        for o in reversed(list(self.operations.values()))
-                        if o["status"] == "pending"
-                        and o["request_id"] == msg.request_id
-                    ),
-                    None,
-                )
+                known = self.known_requests.get(msg.request_id)
+                op = self.operations.get(known[1]) if known else None
                 if op:
+                    if op["status"] in TERMINAL:
+                        if msg.phase in (1, 2):
+                            self.journal.add(
+                                "warning",
+                                "忽略迟到的接受/进行中结果；保留最终结果",
+                                request_id=msg.request_id,
+                            )
+                        return
                     phase = PHASE[msg.phase] if msg.phase < len(PHASE) else "UNKNOWN"
                     reason = (
                         REASON[msg.reason] if msg.reason < len(REASON) else "UNKNOWN"
                     )
                     op.update(
-                        status="accepted" if msg.phase == 1 else "rejected",
+                        status=phase.lower(),
                         protocol_phase=phase,
                         reason=reason,
                         boot_id=str(msg.boot_id),
                         session_id=str(msg.session_id),
+                        event_id=msg.event_id,
+                        result_at_ms=now,
                     )
                     self.journal.add(
                         "rx",
-                        f"{op['name']}：{phase} / {reason}（只读查询）",
+                        f"{op['name']}：{phase} / {reason}",
                         operation_id=op["operation_id"],
                         request_id=msg.request_id,
                         wire=message_json(msg),
                         raw_hex=raw.hex(),
                     )
-                    if msg.echo_op == 1:
+                    if msg.request_msg == 60000 and msg.echo_op == 1:
                         self.resolve(msg.request_id)
-                    elif msg.phase != 1:
+                    elif msg.request_msg != 60000 or msg.echo_op != 8 or msg.phase != 1:
                         self.resolve(msg.request_id)
                     else:
                         self.complete_query()
@@ -290,8 +346,9 @@ class Adapter:
 
     async def schedule(self):
         while True:
+            # Onboard synthetic timers continue when the PC is disconnected or its link is paused.
+            self.sim.tick()
             if self.connected:
-                self.sim.tick()
                 for request_id, pending in list(self.client.pending.items()):
                     if self.now() - pending["last"] < self.client.ack_timeout_ms:
                         continue
@@ -312,7 +369,7 @@ class Adapter:
                             self.client.retry(request_id, self.now()), op, retry=True
                         )
                     except ProtocolError:
-                        op.update(status="unknown", reason="只读请求重试耗尽；结果未知")
+                        op.update(status="unknown", reason="原请求重试耗尽；结果未知")
                         self.journal.add(
                             "warning",
                             op["reason"],
@@ -323,15 +380,45 @@ class Adapter:
                         if future and not future.done():
                             future.set_exception(ProtocolError(op["reason"]))
             phase = self.snapshot()["link"]["phase"]
+            if self.tasks.running and (
+                phase != "online"
+                or (self.last_state and self.last_state.manual_latched)
+            ):
+                self.tasks.interrupt("链路失效或人工接管锁存")
             if phase != self.link_label:
                 self.link_label = phase
                 self.journal.add("connection", f"连接阶段：{phase}")
+            if self.journal.recorder:
+                self.journal.recorder.sample(self.snapshot())
             await asyncio.sleep(0.1)
 
     def set_scenario(self, name):
+        if self.replaying:
+            raise ProtocolError("回放通道不能修改模拟器")
+        if name == "task_bench":
+            self.disconnect()
+            self.tasks.context = None
+            self.tasks.task_bound = False
+            self.tasks.lease = 0
+            self.tasks.unknown_request_id = None
+            self.tasks.current = None
         self.sim.set_scenario(name)
         self.journal.add("scenario", f"模拟场景：{SCENARIOS[name]}")
         return {"scenario": name}
+
+    def stop_task_retries(self):
+        for request_id, (_, op_id) in list(self.known_requests.items()):
+            op = self.operations.get(op_id)
+            if (
+                op
+                and op["status"] == "pending"
+                and op["name"] not in ("HELLO", "QUERY_PROFILE", "QUERY_RESULT")
+            ):
+                op.update(
+                    status="unknown",
+                    reason="流程已停止，停止旧请求重试；仅可查询原编号",
+                )
+                self.client.pending.pop(request_id, None)
 
     def sensor(self, name, bit, age_field, value, telemetry_at=None):
         now = self.now()
@@ -417,7 +504,9 @@ class Adapter:
             "application_version": APPLICATION_VERSION,
             "simulation": True,
             "service_pid": os.getpid(),
-            "read_only": True,
+            "read_only": self.replaying or not self.sim.task_bench,
+            "hardware_control_allowed": False,
+            "task_fixture": self.sim.task_bench,
             "service_ready": True,
             "scenario": self.sim.scenario,
             "scenarios": SCENARIOS,
@@ -463,13 +552,14 @@ class Adapter:
                 if self.profile
                 else "尚未读取配置",
                 "control_allowed": False,
-                "control_reason": "S1 只读；现场许可和动作入口尚未实现",
+                "control_reason": "真实硬件与生产配置未签认；仅允许显式本机模拟任务",
                 "hardware_freshness_qualified": False,
                 "manual_latched": bool(state.manual_latched) if state else None,
                 "lease_id": state.lease_id if state else None,
                 "task_id": state.active_task if state else None,
             },
             "profile": message_json(self.profile) if self.profile else None,
+            "task": self.tasks.view(),
             "operations": list(self.operations.values()),
             "counters": {
                 "sent": self.sent,
@@ -482,6 +572,7 @@ class Adapter:
         }
 
     async def close(self):
+        await self.tasks.close()
         self.disconnect()
         if self.task:
             self.task.cancel()

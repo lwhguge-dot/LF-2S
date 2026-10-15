@@ -31,7 +31,17 @@ export interface Operation {
 }
 export interface State {
   simulation: true;
-  read_only: true;
+  read_only: boolean;
+  hardware_control_allowed?: false;
+  task_fixture?: boolean;
+  task?: {
+    running: boolean;
+    unknown_request_id: number | null;
+    current: TaskRun | null;
+    target_height_mm: number;
+  };
+  replay?: ReplayFrame | null;
+  recording?: Recording;
   service_ready: boolean;
   service_error?: string;
   service_pid?: number;
@@ -82,11 +92,48 @@ export interface Capture {
   hardware_freshness_qualified: false;
   received_at: number;
 }
+export interface TaskRun {
+  task_id: number;
+  status: string;
+  stage: string;
+  reason: string | null;
+  session_id: string;
+  request_id?: number;
+  steps: string[];
+  queried_result?: { request_id: number; phase: string; reason: string };
+}
+export interface Recording {
+  id: string;
+  started?: string;
+  frames?: number;
+  bytes: number;
+  dropped?: number;
+  truncated?: boolean;
+  error?: string | null;
+  complete: boolean;
+}
+export interface ReplayFrame {
+  recording_id: string;
+  index: number;
+  frames: number;
+  historical: true;
+  read_only: true;
+  state: State & { service_time_ms: number };
+  events: EventItem[];
+  image_policy: string;
+}
 export interface DesktopBridge {
   state(): Promise<State>;
   connect(): Promise<Operation>;
   disconnect(): Promise<unknown>;
   profile(): Promise<Operation>;
+  taskStart(confirmed: boolean): Promise<unknown>;
+  taskCancel(): Promise<unknown>;
+  taskQuery(): Promise<unknown>;
+  recordings(): Promise<{ recordings: Recording[] }>;
+  replayOpen(id: string, index?: number): Promise<ReplayFrame>;
+  replaySeek(id: string, index: number): Promise<ReplayFrame>;
+  replayClose(): Promise<unknown>;
   scenario(name: string): Promise<unknown>;
   image(): Promise<Capture>;
   restart(): Promise<unknown>;

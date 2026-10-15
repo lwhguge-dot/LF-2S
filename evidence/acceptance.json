@@ -1,16 +1,16 @@
 {
-  "date": "2026-10-15T21:04:38.185134+08:00",
+  "date": "2026-10-15T22:11:17.625126+08:00",
   "platform": "Windows-11-10.0.26200-SP0",
-  "stage": "S0–S1",
-  "version": "0.1.0",
+  "stage": "S0–S2",
+  "version": "0.2.0",
   "backend": {
-    "tests": 13,
+    "tests": 26,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "development_desktop_checks": 24,
-  "packaged_desktop_checks": 24,
+  "development_desktop_checks": 34,
+  "packaged_desktop_checks": 34,
   "packaged_runtime": {
     "versions": {
       "node": "24.21.0",
@@ -49,11 +49,11 @@
     "arch": "x64"
   },
   "cleanup": {
-    "processes": [],
     "scope": "Only this application workspace; unrelated processes are not terminated",
-    "checked_at": "2026-10-15T21:04:38.0279990+08:00",
-    "passed": true
+    "processes": [],
+    "passed": true,
+    "checked_at": "2026-10-15T22:10:13.4056309+08:00"
   },
   "passed": true,
-  "scope": "read-only synthetic localhost; no hardware/flight acceptance"
+  "scope": "synthetic loopback tasks and read-only replay; no hardware/flight acceptance"
 }

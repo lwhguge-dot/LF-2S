@@ -199,14 +199,14 @@ async function startWorker() {
         if (
           !ready.ready ||
           !ready.simulation ||
-          !ready.read_only ||
+          ready.hardware_control_allowed !== false ||
           ready.api_version !== "1" ||
           !Number.isInteger(ready.port) ||
           ready.port < 1 ||
           ready.port > 65535 ||
           (app.isPackaged && !ready.frozen)
         )
-          throw new Error("后台就绪握手不符合只读模式");
+          throw new Error("后台就绪握手不符合本机模拟边界");
         base = `http://127.0.0.1:${ready.port}`;
         clearTimeout(timer);
         reader.close();
@@ -220,7 +220,11 @@ async function startWorker() {
     owned.stdin.write(JSON.stringify({ token, user_data: userData }) + "\n");
   });
   const health = await request("health");
-  if (!health.ready || !health.read_only || !health.simulation)
+  if (
+    !health.ready ||
+    health.hardware_control_allowed !== false ||
+    !health.simulation
+  )
     throw new Error("后台状态核对失败");
   async function poll() {
     if (myGeneration !== generation || stopping || serviceError) return;
@@ -300,6 +304,9 @@ async function boot() {
     ["connect", "connect"],
     ["disconnect", "disconnect"],
     ["profile", "profile"],
+    ["taskCancel", "tasks/cancel"],
+    ["taskQuery", "tasks/query"],
+    ["replayClose", "replay/close"],
   ]) {
     ipcMain.handle(`station:${name}`, (event) => {
       validate(event);
@@ -317,11 +324,42 @@ async function boot() {
         "bad_fingerprint",
         "wrong_source",
         "reboot",
+        "task_bench",
+        "manual_takeover",
+        "position_reset",
+        "result_loss",
       ].includes(name)
     )
       throw new Error("未定义的模拟场景");
     return request("simulation/scenario", "POST", { name });
   });
+  ipcMain.handle("station:taskStart", (event, confirmed) => {
+    validate(event);
+    if (confirmed !== true) throw new Error("本次模拟许可尚未确认");
+    return request("tasks/start", "POST", { confirmed: true });
+  });
+  ipcMain.handle("station:recordings", (event) => {
+    validate(event);
+    return request("recordings");
+  });
+  for (const name of ["replayOpen", "replaySeek"]) {
+    ipcMain.handle(`station:${name}`, (event, id, index = 0) => {
+      validate(event);
+      if (
+        typeof id !== "string" ||
+        !/^[a-f0-9]{24}$/.test(id) ||
+        !Number.isInteger(index) ||
+        index < 0 ||
+        index > 100000
+      )
+        throw new Error("回放编号或帧无效");
+      return request(
+        name === "replayOpen" ? "replay/open" : "replay/seek",
+        "POST",
+        { recording_id: id, index },
+      );
+    });
+  }
   ipcMain.handle("station:image", (event) => {
     validate(event);
     return request("image", "GET", undefined, true);

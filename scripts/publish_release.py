@@ -170,7 +170,7 @@ def main():
             {
                 "tag_name": tag,
                 "target_commitish": commit,
-                "name": f"{tag} · S0–S1 只读模拟版",
+                "name": f"{tag} · S2 模拟任务与只读回放",
                 "body": notes,
                 "draft": True,
                 "prerelease": True,
@@ -216,7 +216,7 @@ def main():
         f"{API}/releases/{release['id']}",
         "PATCH",
         {
-            "name": f"{tag} · S0–S1 只读模拟版",
+            "name": f"{tag} · S2 模拟任务与只读回放",
             "body": notes,
             "draft": False,
             "prerelease": True,

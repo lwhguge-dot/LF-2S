@@ -6,6 +6,16 @@ contextBridge.exposeInMainWorld(
     connect: () => ipcRenderer.invoke("station:connect"),
     disconnect: () => ipcRenderer.invoke("station:disconnect"),
     profile: () => ipcRenderer.invoke("station:profile"),
+    taskStart: (confirmed) =>
+      ipcRenderer.invoke("station:taskStart", confirmed),
+    taskCancel: () => ipcRenderer.invoke("station:taskCancel"),
+    taskQuery: () => ipcRenderer.invoke("station:taskQuery"),
+    recordings: () => ipcRenderer.invoke("station:recordings"),
+    replayOpen: (id, index = 0) =>
+      ipcRenderer.invoke("station:replayOpen", id, index),
+    replaySeek: (id, index) =>
+      ipcRenderer.invoke("station:replaySeek", id, index),
+    replayClose: () => ipcRenderer.invoke("station:replayClose"),
     scenario: (name) => ipcRenderer.invoke("station:scenario", name),
     image: () => ipcRenderer.invoke("station:image"),
     restart: () => ipcRenderer.invoke("station:restart"),

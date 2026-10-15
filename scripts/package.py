@@ -20,6 +20,9 @@ PUBLIC_EVIDENCE = (
     "package-stale.png",
     "package-logs.png",
     "package-compact.png",
+    "package-task-active.png",
+    "package-task-completed.png",
+    "package-replay.png",
 )
 
 
@@ -77,7 +80,7 @@ def manifest(destination):
     manifest = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "version": VERSION,
-        "scope": "S0–S1 read-only synthetic loopback; not hardware/flight acceptance",
+        "scope": "S0–S2 synthetic task closure and read-only replay; not hardware/flight acceptance",
         "directory": destination.name,
         "source_sha256_lf": source_inputs(),
         "files": [],

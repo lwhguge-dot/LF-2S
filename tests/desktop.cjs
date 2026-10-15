@@ -5,6 +5,7 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const root = path.resolve(__dirname, "..");
 const { _electron: electron } = require("playwright");
+const { verifyS2 } = require("./s2_desktop.cjs");
 const packaged = process.argv.includes("--packaged");
 const output = path.join(root, "evidence");
 fs.mkdirSync(output, { recursive: true });
@@ -29,7 +30,7 @@ const report = {
     ? "bundled Windows x64, system-only PATH"
     : "development Electron + isolated Python",
   scope:
-    "S0–S1 readonly real loopback HTTP/UDP, synthetic measurements and JPEG; no hardware",
+    "S0–S2 synthetic loopback task closure and read-only replay; no hardware",
   checks,
 };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -182,7 +183,7 @@ async function main() {
       isolation.node === "undefined" &&
         isolation.process === "undefined" &&
         isolation.keys.join(",") ===
-          "connect,disconnect,image,onState,openLogs,profile,restart,scenario,state" &&
+          "connect,disconnect,image,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart" &&
         prefs.contextIsolation &&
         prefs.sandbox &&
         !prefs.nodeIntegration &&
@@ -360,14 +361,30 @@ async function main() {
       "backend_restart_does_not_restore_old_session",
       newPid !== pid && (await state(page)).identity.session_id === null,
     );
+    const finalPid = await verifyS2({
+      page,
+      check,
+      state,
+      eventually,
+      scenario,
+      connect,
+      output,
+      suffix,
+    });
     const windowClosed = instance.waitForEvent("close");
     await instance
       .evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
       .catch(() => {});
     await windowClosed;
     instance = undefined;
-    await eventually(() => !alive(newPid), "normal exit leaked backend");
-    check("normal_window_exit_reaps_backend", !alive(newPid));
+    await eventually(
+      () => !alive(newPid) && !alive(finalPid),
+      "normal exit leaked backend",
+    );
+    check(
+      "normal_window_exit_reaps_backend",
+      !alive(newPid) && !alive(finalPid),
+    );
     const second = await launch("abrupt");
     instance = second.instance;
     const abruptPid = (await state(second.page)).service_pid;

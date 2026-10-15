@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
-  "scope": "read-only synthetic localhost; no hardware/flight acceptance",
+  "version": "0.2.0",
+  "scope": "synthetic loopback tasks and read-only replay; no hardware/flight acceptance",
   "backend": {
-    "tests": 13,
+    "tests": 26,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -29,7 +29,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "16401222970390419892"
+        "client_nonce": "9756596806637486901"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -97,6 +97,46 @@
       },
       {
         "name": "backend_restart_does_not_restore_old_session",
+        "passed": true
+      },
+      {
+        "name": "task_button_requires_explicit_new_confirmation",
+        "passed": true
+      },
+      {
+        "name": "accepted_does_not_mean_task_completed",
+        "passed": true
+      },
+      {
+        "name": "actual_buttons_complete_sample_driven_simulated_task",
+        "passed": true
+      },
+      {
+        "name": "confirmation_is_consumed_after_start",
+        "passed": true
+      },
+      {
+        "name": "bounded_recording_contains_multiple_frames",
+        "passed": true
+      },
+      {
+        "name": "readonly_replay_seek_preserves_u64_without_requests",
+        "passed": true
+      },
+      {
+        "name": "replay_exit_keeps_disconnected_without_action_replay",
+        "passed": true
+      },
+      {
+        "name": "manual_input_latches_before_reconnect",
+        "passed": true
+      },
+      {
+        "name": "manual_takeover_latched_across_ui_reconnect",
+        "passed": true
+      },
+      {
+        "name": "restart_during_task_cannot_restore_old_actions",
         "passed": true
       },
       {
@@ -134,7 +174,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "9708654636348285079"
+        "client_nonce": "10586349942231565898"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -202,6 +242,46 @@
       },
       {
         "name": "backend_restart_does_not_restore_old_session",
+        "passed": true
+      },
+      {
+        "name": "task_button_requires_explicit_new_confirmation",
+        "passed": true
+      },
+      {
+        "name": "accepted_does_not_mean_task_completed",
+        "passed": true
+      },
+      {
+        "name": "actual_buttons_complete_sample_driven_simulated_task",
+        "passed": true
+      },
+      {
+        "name": "confirmation_is_consumed_after_start",
+        "passed": true
+      },
+      {
+        "name": "bounded_recording_contains_multiple_frames",
+        "passed": true
+      },
+      {
+        "name": "readonly_replay_seek_preserves_u64_without_requests",
+        "passed": true
+      },
+      {
+        "name": "replay_exit_keeps_disconnected_without_action_replay",
+        "passed": true
+      },
+      {
+        "name": "manual_input_latches_before_reconnect",
+        "passed": true
+      },
+      {
+        "name": "manual_takeover_latched_across_ui_reconnect",
+        "passed": true
+      },
+      {
+        "name": "restart_during_task_cannot_restore_old_actions",
         "passed": true
       },
       {

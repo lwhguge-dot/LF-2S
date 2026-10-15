@@ -22,6 +22,10 @@ SCENARIOS = {
     "bad_fingerprint": "协议指纹不匹配",
     "wrong_source": "飞控来源不匹配",
     "reboot": "模拟飞控重启",
+    "task_bench": "重置并准备任务模拟器（新会话）",
+    "manual_takeover": "模拟原遥控人工接管并锁存",
+    "position_reset": "模拟定位代数变化",
+    "result_loss": "丢弃模拟起飞结果",
 }
 
 
@@ -44,6 +48,12 @@ class Simulation:
             (Path(data_root) / "simulation/profile.json").read_text("utf-8")
         )
         self.boot = 0xF1234567  # session_id deliberately exceeds JavaScript's safe integer range
+        self.task_bench = False
+        self.reset_counter = 1
+        self.z = 0.0
+        self.armed = False
+        self.last_tick = self.clock()
+        self.last_events = 0
         self.model = self.make_model()
         self.scenario = "healthy"
         self.gateway = Gateway()
@@ -51,7 +61,16 @@ class Simulation:
         self.channels = []
 
     def make_model(self):
-        return FCModel(self.profile, boot_id=self.boot, boot_storage_verified=False)
+        # These qualifications exist ONLY inside the in-process synthetic model.
+        # The original profile file remains unsigned. Never export this as hardware configuration.
+        profile = (
+            {**self.profile, "config_valid": 1, "validated_mask": 1}
+            if self.task_bench
+            else self.profile
+        )
+        return FCModel(
+            profile, boot_id=self.boot, boot_storage_verified=self.task_bench
+        )
 
     async def start(self, receive):
         loop = asyncio.get_running_loop()
@@ -84,14 +103,27 @@ class Simulation:
             return
         try:
             msg = decode_datagram(raw)
-            if msg.get_msgId() != 60000 or msg.op not in (1, 8):
-                return  # defense in depth: the simulation network is read-only too
+            readonly = msg.get_msgId() == 60000 and msg.op in (1, 8)
+            allowed = self.task_bench and (
+                (msg.get_msgId() == 60000 and msg.op in (2, 3, 4, 5, 6, 7))
+                or (msg.get_msgId() == 60001 and msg.op in (1, 2, 5, 6, 7, 8))
+            )
+            if not readonly and not allowed:
+                return
             self.emit(self.model.handle(raw, 1, self.clock()))
         except (ProtocolError, ValueError):
             pass
 
     def emit(self, frames):
         for raw in frames:
+            msg = decode_datagram(raw)
+            if (
+                self.scenario == "result_loss"
+                and msg.get_msgId() == 60002
+                and msg.request_msg == 60001
+                and msg.echo_op == 2
+            ):
+                continue
             if self.scenario == "bad_fingerprint":
                 msg = decode_datagram(raw)
                 if msg.get_msgId() == 60003:
@@ -114,14 +146,26 @@ class Simulation:
 
     def tick(self):
         now = self.clock()
-        if self.scenario == "link_pause":
-            return
+        dt = min(max(0, now - self.last_tick), 150) / 1000
+        self.last_tick = now
         if self.scenario not in ("sensor_freeze", "unknown"):
-            # Stationary synthetic bench sample: IDLE, motors locked. No flying implied.
+            if self.task_bench:
+                active = self.model.active
+                op = active["req"].op if active else 0
+                if self.model.owner and op == 2:
+                    self.armed = True
+                    self.z = min(
+                        active["goal"][2], self.z + self.profile["max_z_mm_s"] * dt
+                    )
+                elif self.model.mode in ("LANDING", "FAILSAFE_LAND"):
+                    self.z = max(0, self.z - self.profile["land_speed_mm_s"] * dt)
+                    if self.z == 0:
+                        self.armed = False
+            # Independent, explicitly synthetic plant samples drive FCModel completion.
             s = Sensors(
-                x_mm=250,
-                y_mm=-180,
-                z_mm=420,
+                x_mm=0 if self.task_bench else 250,
+                y_mm=0 if self.task_bench else -180,
+                z_mm=round(self.z) if self.task_bench else 420,
                 attitude_valid=True,
                 position_valid=True,
                 height_valid=True,
@@ -130,10 +174,12 @@ class Simulation:
                 height_ms=now,
                 battery_mv=3820,
                 battery_ms=now,
-                landed=False,
-                landed_valid=False,
-                preflight=False,
-                reset_counter=1,
+                landed=self.task_bench and self.z == 0 and not self.armed,
+                landed_valid=self.task_bench,
+                landed_ms=now if self.task_bench else None,
+                armed=self.armed if self.task_bench else False,
+                preflight=self.task_bench,
+                reset_counter=self.reset_counter,
                 roll=0.02 * math.sin(now / 1000),
                 pitch=0.01,
                 yaw=0.0,
@@ -177,7 +223,7 @@ class Simulation:
                         yawspeed=0.0,
                         pose_covariance=[float("nan")] + [0.0] * 20,
                         velocity_covariance=[float("nan")] + [0.0] * 20,
-                        reset_counter=1,
+                        reset_counter=self.reset_counter & 255,
                         estimator_type=0,
                         quality=100,
                     )
@@ -185,18 +231,30 @@ class Simulation:
             )
         else:
             if self.scenario == "unknown":
-                self.model.sensors = Sensors(reset_counter=1)
+                self.model.sensors = Sensors(reset_counter=self.reset_counter)
             self.emit(self.model.tick(now))
+        if now - self.last_events >= self.profile["event_repeat_ms"]:
+            self.last_events = now
+            self.emit(self.model.repeat_events())
 
     def set_scenario(self, name):
         if name not in SCENARIOS:
             raise ValueError("Unknown simulation scenario")
         self.scenario = name
-        if name == "reboot":
+        if name in ("reboot", "task_bench"):
+            if name == "task_bench":
+                self.task_bench = True
             self.boot += 1
             self.model = self.make_model()
+            self.z = 0
+            self.armed = False
+            self.reset_counter = 1
+        if name == "manual_takeover":
+            self.emit(self.model.manual_takeover(self.clock()))
+        if name == "position_reset":
+            self.reset_counter += 1
         if name == "unknown":
-            self.model.sensors = Sensors(reset_counter=1)
+            self.model.sensors = Sensors(reset_counter=self.reset_counter)
 
     def close(self):
         for channel in self.channels:
