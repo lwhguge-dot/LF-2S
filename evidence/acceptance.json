@@ -1,0 +1,59 @@
+{
+  "date": "2026-10-15T21:04:38.185134+08:00",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "stage": "S0–S1",
+  "version": "0.1.0",
+  "backend": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "development_desktop_checks": 24,
+  "packaged_desktop_checks": 24,
+  "packaged_runtime": {
+    "versions": {
+      "node": "24.21.0",
+      "acorn": "8.18.0",
+      "ada": "4.0.0",
+      "amaro": "1.1.11",
+      "ares": "1.34.8",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.2",
+      "llhttp": "9.4.3",
+      "merve": "1.2.2",
+      "modules": "149",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.70.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "0.0.0",
+      "simdjson": "4.6.7",
+      "simdutf": "7.7.0",
+      "sqlite": "3.53.4",
+      "tz": "2026d",
+      "undici": "7.29.1",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "15.2.124.37-electron.0",
+      "zlib": "1.3.2.1-motley",
+      "zstd": "1.6.0",
+      "electron": "44.7.2",
+      "chrome": "152.0.7977.149"
+    },
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "cleanup": {
+    "processes": [],
+    "scope": "Only this application workspace; unrelated processes are not terminated",
+    "checked_at": "2026-10-15T21:04:38.0279990+08:00",
+    "passed": true
+  },
+  "passed": true,
+  "scope": "read-only synthetic localhost; no hardware/flight acceptance"
+}

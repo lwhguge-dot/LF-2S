@@ -1,0 +1,9 @@
+{
+  "electron": {
+    "version": "44.7.2",
+    "platform": "win32-x64",
+    "archive": "electron-v44.7.2-win32-x64.zip",
+    "sha256": "10a89447ef64ac5cb9f782af48ffd83734a40ae91681259d1048ca3c9e6c5da4",
+    "executable_sha256": "1f41127064012c5e74422b2e0dfc35ff0b0fe8d7908b97d01503becd1b7fa9e1"
+  }
+}

@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
+# Protocol snapshot hashes describe the original bytes, including original CRLF.
+protocol/lf2s_protocol/* -text
+protocol/pymavlink-COPYING.txt -text

@@ -1,0 +1,265 @@
+{
+  "version": "0.1.0",
+  "scope": "read-only synthetic localhost; no hardware/flight acceptance",
+  "backend": {
+    "tests": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "protocol": {
+    "passed": true,
+    "files": 9,
+    "authority_checked": true,
+    "authority_unchanged": true,
+    "dialect_hash": "5889088805303263"
+  },
+  "development": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "startup_does_not_automatically_connect_or_replay",
+        "passed": true
+      },
+      {
+        "name": "actual_click_hello_profile_and_native_udp",
+        "passed": true
+      },
+      {
+        "name": "u64_survives_wire_http_ipc_vue_dom",
+        "passed": true,
+        "session_id": "17375808096009453569",
+        "client_nonce": "16401222970390419892"
+      },
+      {
+        "name": "narrow_bridge_and_sandbox",
+        "passed": true
+      },
+      {
+        "name": "jpeg_really_decodes_in_renderer",
+        "passed": true
+      },
+      {
+        "name": "per_sensor_stale_while_link_online",
+        "passed": true
+      },
+      {
+        "name": "unknown_is_null_and_chinese_reason_visible",
+        "passed": true
+      },
+      {
+        "name": "paused_network_expires_telemetry_image_and_query_ui",
+        "passed": true
+      },
+      {
+        "name": "bad_fingerprint_chinese_rejection",
+        "passed": true
+      },
+      {
+        "name": "wrong_source_chinese_rejection",
+        "passed": true
+      },
+      {
+        "name": "protocol_page_displays_original_configuration",
+        "passed": true
+      },
+      {
+        "name": "journal_expands_correlated_protocol_fields",
+        "passed": true
+      },
+      {
+        "name": "future_s2_s5_retained_and_pending",
+        "passed": true
+      },
+      {
+        "name": "compact_desktop_no_horizontal_overflow",
+        "passed": true
+      },
+      {
+        "name": "offline_local_reload_does_not_replay_protocol",
+        "passed": true
+      },
+      {
+        "name": "second_launch_does_not_create_another_owner",
+        "passed": true
+      },
+      {
+        "name": "fc_reboot_invalidates_old_profile",
+        "passed": true
+      },
+      {
+        "name": "explicit_reconnect_new_boot_session",
+        "passed": true
+      },
+      {
+        "name": "backend_exit_visible_and_cached_numbers_invalidated",
+        "passed": true
+      },
+      {
+        "name": "backend_restart_does_not_restore_old_session",
+        "passed": true
+      },
+      {
+        "name": "normal_window_exit_reaps_backend",
+        "passed": true
+      },
+      {
+        "name": "abrupt_owner_exit_eof_reaps_backend",
+        "passed": true
+      },
+      {
+        "name": "renderer_has_no_errors",
+        "passed": true,
+        "rendererErrors": []
+      },
+      {
+        "name": "no_external_renderer_requests",
+        "passed": true,
+        "externalRequests": []
+      }
+    ]
+  },
+  "packaged": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "startup_does_not_automatically_connect_or_replay",
+        "passed": true
+      },
+      {
+        "name": "actual_click_hello_profile_and_native_udp",
+        "passed": true
+      },
+      {
+        "name": "u64_survives_wire_http_ipc_vue_dom",
+        "passed": true,
+        "session_id": "17375808096009453569",
+        "client_nonce": "9708654636348285079"
+      },
+      {
+        "name": "narrow_bridge_and_sandbox",
+        "passed": true
+      },
+      {
+        "name": "jpeg_really_decodes_in_renderer",
+        "passed": true
+      },
+      {
+        "name": "per_sensor_stale_while_link_online",
+        "passed": true
+      },
+      {
+        "name": "unknown_is_null_and_chinese_reason_visible",
+        "passed": true
+      },
+      {
+        "name": "paused_network_expires_telemetry_image_and_query_ui",
+        "passed": true
+      },
+      {
+        "name": "bad_fingerprint_chinese_rejection",
+        "passed": true
+      },
+      {
+        "name": "wrong_source_chinese_rejection",
+        "passed": true
+      },
+      {
+        "name": "protocol_page_displays_original_configuration",
+        "passed": true
+      },
+      {
+        "name": "journal_expands_correlated_protocol_fields",
+        "passed": true
+      },
+      {
+        "name": "future_s2_s5_retained_and_pending",
+        "passed": true
+      },
+      {
+        "name": "compact_desktop_no_horizontal_overflow",
+        "passed": true
+      },
+      {
+        "name": "offline_local_reload_does_not_replay_protocol",
+        "passed": true
+      },
+      {
+        "name": "second_launch_does_not_create_another_owner",
+        "passed": true
+      },
+      {
+        "name": "fc_reboot_invalidates_old_profile",
+        "passed": true
+      },
+      {
+        "name": "explicit_reconnect_new_boot_session",
+        "passed": true
+      },
+      {
+        "name": "backend_exit_visible_and_cached_numbers_invalidated",
+        "passed": true
+      },
+      {
+        "name": "backend_restart_does_not_restore_old_session",
+        "passed": true
+      },
+      {
+        "name": "normal_window_exit_reaps_backend",
+        "passed": true
+      },
+      {
+        "name": "abrupt_owner_exit_eof_reaps_backend",
+        "passed": true
+      },
+      {
+        "name": "renderer_has_no_errors",
+        "passed": true,
+        "rendererErrors": []
+      },
+      {
+        "name": "no_external_renderer_requests",
+        "passed": true,
+        "externalRequests": []
+      }
+    ],
+    "runtime": {
+      "versions": {
+        "node": "24.21.0",
+        "acorn": "8.18.0",
+        "ada": "4.0.0",
+        "amaro": "1.1.11",
+        "ares": "1.34.8",
+        "brotli": "1.2.0",
+        "cldr": "48.0",
+        "icu": "78.2",
+        "llhttp": "9.4.3",
+        "merve": "1.2.2",
+        "modules": "149",
+        "napi": "10",
+        "nbytes": "0.1.4",
+        "ncrypto": "0.0.1",
+        "nghttp2": "1.70.0",
+        "nghttp3": "",
+        "ngtcp2": "",
+        "openssl": "0.0.0",
+        "simdjson": "4.6.7",
+        "simdutf": "7.7.0",
+        "sqlite": "3.53.4",
+        "tz": "2026d",
+        "undici": "7.29.1",
+        "unicode": "17.0",
+        "uv": "1.52.1",
+        "uvwasi": "0.0.23",
+        "v8": "15.2.124.37-electron.0",
+        "zlib": "1.3.2.1-motley",
+        "zstd": "1.6.0",
+        "electron": "44.7.2",
+        "chrome": "152.0.7977.149"
+      },
+      "platform": "win32",
+      "arch": "x64"
+    }
+  },
+  "cleanup_passed": true
+}

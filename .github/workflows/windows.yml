@@ -1,0 +1,108 @@
+name: Windows 构建与发布
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "要构建的已推送版本标签，如 v0.1.0；只检查分支时留空"
+        type: string
+        default: ""
+      publish:
+        description: "全部检查通过后，发布该标签的 GitHub 预览版本"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "26.8.2"
+          cache: npm
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.12.19"
+      - name: 校验发布标签
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          if ($env:PUBLISH -eq 'true') {
+            $expected = 'v' + (Get-Content package.json -Raw | ConvertFrom-Json).version
+            if ($env:RELEASE_TAG -ne $expected) { throw '发布标签必须与 package.json 版本一致' }
+            $tagged = git rev-parse "$expected^{commit}"
+            if ($LASTEXITCODE -ne 0 -or $tagged -ne (git rev-parse HEAD)) { throw '必须构建该标签的提交' }
+          }
+      - name: 恢复独立依赖
+        shell: pwsh
+        run: |
+          npm install --global npm@11.19.1 --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'npm 安装失败' }
+          ./scripts/Station.ps1 setup
+      - name: 后台与真实开发桌面验收
+        shell: pwsh
+        run: ./scripts/Station.ps1 check
+      - name: 打包并验证自带运行时
+        shell: pwsh
+        run: |
+          ./scripts/Station.ps1 package
+          ./scripts/Station.ps1 verify-package
+          ./.venv/Scripts/python.exe -B scripts/report.py
+          if ($LASTEXITCODE -ne 0) { throw '报告失败' }
+          ./.venv/Scripts/python.exe -B scripts/package.py --refresh-docs
+          if ($LASTEXITCODE -ne 0) { throw '刷新发布文档失败' }
+      - name: 压缩与解压后实际桌面复验
+        shell: pwsh
+        run: |
+          ./scripts/Station.ps1 archive
+          ./scripts/Station.ps1 verify-archive
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: windows-x64-verified
+          path: release/assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: windows-x64-verified
+          path: release/assets
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        with:
+          version: "0.12.19"
+      - name: 上传校验后发布预览版本
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv venv --python 3.12.14 .venv
+          if ($LASTEXITCODE -ne 0) { throw 'Python 恢复失败' }
+          ./.venv/Scripts/python.exe -B scripts/publish_release.py
+          if ($LASTEXITCODE -ne 0) { throw '发布失败；已上传草稿不会被自动覆盖' }

@@ -1,0 +1,52 @@
+{
+  "authority": "P1/01_通信协议",
+  "version": "2.0.0-draft1",
+  "dialect_hash": "5889088805303263",
+  "files": [
+    {
+      "source": "02_参考实现/python/lf2s_protocol/__init__.py",
+      "target": "protocol/lf2s_protocol/__init__.py",
+      "sha256": "bbcea3c482a6fade89c64f28c3bce5535277a4c5283d968bd8246dd09dbc19df"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/client.py",
+      "target": "protocol/lf2s_protocol/client.py",
+      "sha256": "da2c6d2ca470813b615e826a8a0c1b74f4a5c2c14d9c9dd6d6759cf7fb106d3b"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/dialect.py",
+      "target": "protocol/lf2s_protocol/dialect.py",
+      "sha256": "488cf3d6663e1f154ead62779219d9031e3175873e9e8f4532f636c23a7e9ea7"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/image_http.py",
+      "target": "protocol/lf2s_protocol/image_http.py",
+      "sha256": "08f0274f0e0befa3266a6e31aa98bce2e60ce1f50aeec01dabdcd7182fa96799"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/model.py",
+      "target": "protocol/lf2s_protocol/model.py",
+      "sha256": "9593e4380fefc94930bcf06c81561b4144f61bb0342fce41acb07acea315095a"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/transports.py",
+      "target": "protocol/lf2s_protocol/transports.py",
+      "sha256": "8a0aa1302c4dc32f8439deb647875d9b5f39b030dd5dcf1e7a4f52365cab5fce"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/version.py",
+      "target": "protocol/lf2s_protocol/version.py",
+      "sha256": "364be6d8ec3633d66191957cc438b52b5372e5e887a0a4660d9dd5fb06895265"
+    },
+    {
+      "source": "02_参考实现/python/lf2s_protocol/wire.py",
+      "target": "protocol/lf2s_protocol/wire.py",
+      "sha256": "e2bdb4737647c698011ce5408d2f9b4c3961a4cc2ea8b1daf561b9e11057e667"
+    },
+    {
+      "source": "04_资料依据/pymavlink-2.4.50-COPYING.txt",
+      "target": "protocol/pymavlink-COPYING.txt",
+      "sha256": "cbc6d5236c8119fbc92a44e9bad194f2a8886d65b86a896d3404182f415a920b"
+    }
+  ]
+}

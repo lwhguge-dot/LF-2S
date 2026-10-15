@@ -1,0 +1,36 @@
+{
+  "name": "lf2s-station",
+  "productName": "LF-2S 上位机",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lwhguge-dot/LF-2S.git"
+  },
+  "description": "LF-2S S0–S1 read-only simulation desktop station",
+  "main": "desktop/main.cjs",
+  "engines": {
+    "node": "26.8.2",
+    "npm": "11.19.1"
+  },
+  "scripts": {
+    "build": "vue-tsc --noEmit && vite build",
+    "start": "npm run build && electron .",
+    "check:desktop": "node --check desktop/main.cjs && node --check desktop/preload.cjs",
+    "verify:desktop": "node tests/desktop.cjs",
+    "verify:package": "node tests/desktop.cjs --packaged"
+  },
+  "dependencies": {
+    "vue": "3.5.44"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.10",
+    "electron": "44.7.2",
+    "playwright": "1.64.1",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vue-tsc": "3.3.13"
+  }
+}
