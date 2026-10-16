@@ -35,6 +35,16 @@ def main():
         "图像解码、对焦请求接受、飞控未知和断开失效检查通过。"
         if len(physical) == 2 else "本机缺少完整实物双模式报告，ESP32 实测状态不能据此确认。"
     )
+    stability_path = evidence / "preview-stability-summary.json"
+    stability = json.loads(stability_path.read_text("utf-8")) if stability_path.exists() else None
+    if stability and stability.get("application_version") != VERSION:
+        stability = None
+    stability_note = (
+        f"修复前约 {stability['baseline']['elapsed_ms'] / 1000:.3f} 秒、{stability['baseline']['frames']} 张图后失效；"
+        f"修复后 {stability['fixed']['elapsed_ms'] / 1000:.3f} 秒连续收到 {stability['fixed']['frames']} 张图，"
+        f"读取异常 {stability['fixed']['errors']} 次，最慢请求 {stability['fixed']['max_request_ms']} ms。"
+        if stability else "未提供匹配此版本的实板持续预览摘要。"
+    )
     cleanup = json.loads((evidence / "cleanup.json").read_text("utf-8-sig"))
     assert (
         backend["failures"] == backend["errors"] == 0
@@ -68,6 +78,7 @@ def main():
         "passed": True,
         "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
         "esp32_display_bench": physical,
+        "preview_stability": stability,
     }
     (evidence / "acceptance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), "utf-8"
@@ -85,6 +96,7 @@ def main():
         },
         "cleanup_passed": cleanup["passed"],
         "esp32_display_bench": physical,
+        "preview_stability": stability,
     }
     (evidence / "public-verification.json").write_text(
         json.dumps(public, ensure_ascii=False, indent=2) + "\n", "utf-8"
@@ -123,6 +135,12 @@ def main():
 {physical_note}
 
 真实板测试独立于软件/模拟回归，使用 `tests/esp32_live.cjs`。实物摘要：`{json.dumps(physical, ensure_ascii=False)}`。原始实物 JSON 与照片留在本机，不随公开文档携带。显示成功与 AF 命令接受不证明光学对焦、曝光新鲜度或标定合格。实物连接占用期间模拟操作拒绝；回放关闭实物通道；飞控测量保持未知。固件的 UART 与动作出口关闭。
+
+### 持续预览排查
+
+{stability_note}
+
+上述持续预览数据来自随源码保留的本机实板摘要，默认软件验收不重复操作硬件。原始负载和连接条件不能据此视为完全相同；不宣称吞吐改善比例或长期无线性能。修复与回归范围见 docs/07；临时恢复不接纳新流或重发对焦/飞行动作。
 
 公开仓库只保留 public-verification.json、acceptance.json、本报告和截图；JUnit、完整运行报告与进程记录由复验生成，不把本机绝对路径和主机名带入公开发布。
 

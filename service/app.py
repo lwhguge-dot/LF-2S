@@ -78,7 +78,7 @@ def create_app(root, token, port, user_data):
             try:
                 await bench.refresh()
             except ProtocolError:
-                pass  # Invalidated until an explicit new connection.
+                pass  # The provider bounds transient recovery and pins the paired stream.
 
     @asynccontextmanager
     async def lifespan(app):

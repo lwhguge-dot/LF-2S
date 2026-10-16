@@ -106,12 +106,20 @@ export interface TaskRun {
 }
 export interface Bench {
   active: boolean;
-  phase: "disconnected" | "connecting" | "online" | "error";
+  phase: "disconnected" | "connecting" | "online" | "recovering" | "error";
   reason: string | null;
   host: string;
   port: number;
   epoch: number;
   health_age_ms: number | null;
+  transport_failures: number;
+  recoveries: number;
+  last_error: {
+    code: string;
+    endpoint: string;
+    elapsed_ms: number;
+    os_error: number | null;
+  } | null;
   health: {
     firmware: string;
     protocol: string;

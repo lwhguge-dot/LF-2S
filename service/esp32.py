@@ -20,6 +20,16 @@ PRIVATE_NETWORKS = tuple(
 )
 
 
+class TransportError(ProtocolError):
+    """A finite HTTP transfer failed; it does not establish a device reboot."""
+
+    def __init__(self, code, *, elapsed_ms=0, os_error=None):
+        super().__init__(code)
+        self.code = code
+        self.elapsed_ms = elapsed_ms
+        self.os_error = os_error
+
+
 def target(host, port):
     try:
         address = ipaddress.IPv4Address(host)
@@ -50,13 +60,18 @@ def http_request(host, port, method, route, limit):
     """No environment proxy, redirect, configurable path or unbounded download."""
     connection = http.client.HTTPConnection(host, port, timeout=1)
     timer = None
+    expired = threading.Event()
+    started = time.monotonic()
     try:
         connection.connect()
         owned = connection.sock
-        duration = 5 if method == "POST" and route == "/focus" else 2
+        # A frame wait can take four seconds in esp32-camera. A display timeout
+        # must cover capture plus transfer; it is not an exposure-age guarantee.
+        duration = 6 if route.startswith("/preview?") else 5 if route == "/focus" else 2
         owned.settimeout(duration)
 
         def expire():
+            expired.set()
             try:
                 owned.shutdown(socket.SHUT_RDWR)
             except OSError:
@@ -74,10 +89,18 @@ def http_request(host, port, method, route, limit):
         length = headers.get("content-length", "")
         if not re.fullmatch(r"[0-9]{1,7}", length) or int(length) > limit:
             raise ProtocolError("ESP32 响应长度无效或超过上限")
-        data = response.read(limit + 1)
+        data = response.read(int(length))
+        if expired.is_set():
+            raise TransportError("response_timeout")
         if len(data) != int(length):
-            raise ProtocolError("ESP32 响应不完整")
+            raise TransportError("incomplete_response")
         return response.status, headers, data
+    except (OSError, http.client.HTTPException, TransportError) as exc:
+        code = "response_timeout" if expired.is_set() or isinstance(exc, TimeoutError) else (
+            exc.code if isinstance(exc, TransportError) else "connection_interrupted"
+        )
+        raise TransportError(code, elapsed_ms=round((time.monotonic() - started) * 1000),
+                             os_error=getattr(exc, "winerror", None) or getattr(exc, "errno", None)) from exc
     finally:
         if timer:
             timer.cancel()
@@ -168,13 +191,21 @@ class Esp32Bench:
         self.previous = (0, 0)
         self.lock = asyncio.Lock()
         self.command_lock = asyncio.Lock()
+        self.paired_stream = None
+        self.retry_at = 0
+        self.transport_failures = 0
+        self.recoveries = 0
+        self.failure_streak = 0
+        self.last_error = None
 
     def snapshot(self):
         age = round((time.monotonic() - self.health_at) * 1000) if self.health else None
         return {"active": self.active, "phase": self.phase, "reason": self.reason,
                 "host": self.host, "port": self.port, "epoch": self.epoch,
                 "health": self.health if age is not None and age < 4000 else None,
-                "health_age_ms": age, "display_only": True, "hardware_control_allowed": False}
+                "health_age_ms": age, "display_only": True, "hardware_control_allowed": False,
+                "transport_failures": self.transport_failures, "recoveries": self.recoveries,
+                "last_error": self.last_error}
 
     def disconnect(self):
         self.epoch += 1
@@ -183,6 +214,9 @@ class Esp32Bench:
         self.reason = None
         self.health = None
         self.previous = (0, 0)
+        self.paired_stream = None
+        self.failure_streak = 0
+        self.last_error = None
         return self.snapshot()
 
     def fail(self, reason):
@@ -191,19 +225,37 @@ class Esp32Bench:
         self.reason = reason
         self.health = None
         self.previous = (0, 0)
-        self.journal.add("warning", reason, source="esp32_bench")
+        self.journal.add("warning", reason, source="esp32_bench", simulation=False)
+
+    def recover(self, method, route, error):
+        self.transport_failures += 1
+        self.failure_streak += 1
+        self.last_error = {"code": error.code, "endpoint": route.split("?")[0],
+                           "elapsed_ms": error.elapsed_ms, "os_error": error.os_error}
+        self.journal.add("warning", "ESP32 HTTP 传输暂时失败", source="esp32_bench", simulation=False,
+                         **self.last_error, method=method, attempt=self.failure_streak)
+        if self.failure_streak >= 3:
+            self.fail("连续三次无法读取 ESP32；请确认电脑仍连接板卡热点，再断开并重新连接")
+        else:
+            self.phase = "recovering"
+            self.health = None
+            label = "响应超时" if error.code == "response_timeout" else "传输中断"
+            self.reason = f"ESP32 {label}；正在重新核对当前板卡（{self.failure_streak}/3）"
+            self.retry_at = time.monotonic() + .75 * self.failure_streak
 
     async def exchange(self, method, route, limit, epoch):
         try:
             answer = await asyncio.to_thread(http_request, self.host, self.port, method, route, limit)
-        except (OSError, http.client.HTTPException, ProtocolError) as exc:
+        except (OSError, http.client.HTTPException, TransportError) as exc:
             if epoch != self.epoch:
                 raise ProtocolError("实物连接已改变，丢弃迟到响应") from exc
-            reason = "ESP32 请求失败；请检查热点连接后断开并重新连接"
-            self.journal.add("warning", "ESP32 HTTP 读取失败", source="esp32_bench",
-                             error_type=type(exc).__name__, method=method, endpoint=route.split("?")[0])
-            self.fail(reason)
-            raise ProtocolError(reason) from exc
+            error = exc if isinstance(exc, TransportError) else TransportError("connection_interrupted")
+            self.recover(method, route, error)
+            raise ProtocolError(self.reason) from exc
+        except ProtocolError as exc:
+            if epoch == self.epoch:
+                self.fail(str(exc))
+            raise
         if epoch != self.epoch or not self.active:
             raise ProtocolError("实物连接已改变，丢弃迟到响应")
         return answer
@@ -218,7 +270,7 @@ class Esp32Bench:
         self.request_id = 0
         async with self.lock:
             await self.read_health(self.epoch)
-        self.journal.add("connection", "ESP32 实物台架已连接；仅图像和板卡诊断", source="esp32_bench")
+        self.journal.add("connection", "ESP32 实物台架已连接；仅图像和板卡诊断", source="esp32_bench", simulation=False)
         return self.snapshot()
 
     async def read_health(self, epoch):
@@ -227,17 +279,24 @@ class Esp32Bench:
             if code != 200:
                 raise ProtocolError("ESP32 状态请求失败")
             health = health_data(headers, data)
-            if self.health and health["camera_stream_id"] != self.health["camera_stream_id"]:
+            if self.paired_stream and health["camera_stream_id"] != self.paired_stream:
                 raise ProtocolError("摄像头启动代数已改变；请断开并重新连接")
         except ProtocolError as exc:
             self.fail(str(exc))
             raise
+        if self.phase == "recovering":
+            self.recoveries += 1
+            self.journal.add("connection", "同一相机流已恢复响应，预览可继续", source="esp32_bench", simulation=False)
+        self.paired_stream = health["camera_stream_id"]
         self.health = health
         self.health_at = time.monotonic()
         self.phase = "online"
+        self.reason = None
+        self.failure_streak = 0
 
     async def refresh(self):
-        if not self.active or self.phase != "online" or self.lock.locked() or self.command_lock.locked():
+        if (not self.active or self.phase not in ("online", "recovering") or self.lock.locked()
+                or self.command_lock.locked() or (self.phase == "recovering" and time.monotonic() < self.retry_at)):
             return
         async with self.lock:
             await self.read_health(self.epoch)
@@ -254,6 +313,8 @@ class Esp32Bench:
         async with self.command_lock, self.lock:
             if epoch != self.epoch:
                 raise ProtocolError("实物连接已改变，丢弃排队图像请求")
+            if self.phase != "online":
+                raise ProtocolError(self.reason or "ESP32 正在恢复响应")
             if time.monotonic() - self.health_at > 1.5:
                 await self.read_health(epoch)
             if self.request_id >= 0xFFFFFFFF:
@@ -264,8 +325,11 @@ class Esp32Bench:
             stream = self.health["camera_stream_id"]
             route = f"/preview?request_id={request_id}&stream_id={stream}"
             code, headers, data = await self.exchange("GET", route, MAX_JPEG, epoch)
-            if code in (429, 503):
+            if code == 429:
                 raise ProtocolError("摄像头暂忙，请稍后刷新")
+            if code in (503, 504):
+                self.recover("GET", route, TransportError("camera_frame_unavailable"))
+                raise ProtocolError(self.reason)
             try:
                 if code != 200:
                     raise ProtocolError("摄像头拒绝当前流；请断开并重新连接")
@@ -295,6 +359,8 @@ class Esp32Bench:
         async with self.command_lock, self.lock:
             if epoch != self.epoch:
                 raise ProtocolError("实物连接已改变，丢弃排队对焦请求")
+            if self.phase != "online":
+                raise ProtocolError(self.reason or "ESP32 正在恢复响应")
             code, headers, data = await self.exchange("POST", "/focus", 1024, epoch)
             try:
                 accepted = code == 200 and headers.get("content-type") == "application/json" and json.loads(data).get("accepted") is True
@@ -303,5 +369,5 @@ class Esp32Bench:
             if not accepted:
                 raise ProtocolError("重新对焦请求未被接受")
             self.health = {**self.health, "autofocus_focused": False, "autofocus_busy": True}
-            self.journal.add("camera", "已请求重新对焦；完成状态以传感器回报为准", source="esp32_bench")
+            self.journal.add("camera", "已请求重新对焦；完成状态以传感器回报为准", source="esp32_bench", simulation=False)
             return {"accepted": True, "focused": False}

@@ -1,0 +1,28 @@
+{
+  "application_version": "0.3.1",
+  "firmware": "0.1.4",
+  "hardware": "paired ESP32-S3 / OV5640",
+  "scope": "One-minute display bench on the same host; no long-term radio, optical timing, FC or flight acceptance",
+  "baseline": {
+    "application_version": "0.3.0",
+    "elapsed_ms": 9735,
+    "frames": 5,
+    "errors": 1,
+    "phase_after": "error",
+    "wifi_connected_after_failure": true
+  },
+  "fixed": {
+    "elapsed_ms": 60125,
+    "frames": 54,
+    "errors": 0,
+    "phase_after": "online",
+    "max_request_ms": 2656,
+    "requests_exceeding_two_seconds": 6,
+    "wifi_restored": true
+  },
+  "raw_evidence_sha256": {
+    "baseline.json": "becacc463844737ae28b685b2473a5e259f9dd7ae1534e067ca5d2818624c335",
+    "fixed.json": "13ac7802da06e1385ffb6fce2e2305569d7a8273753f1b22ef1b0ceb31b438c7",
+    "baseline-serial.log": "6f2d7647065bcd80b0062584b560ad542436feb1bccc046e2ab7764b7019b165"
+  }
+}

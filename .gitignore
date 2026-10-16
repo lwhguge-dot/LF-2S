@@ -16,4 +16,5 @@ evidence/*
 !evidence/验收报告.md
 !evidence/acceptance.json
 !evidence/public-verification.json
+!evidence/preview-stability-summary.json
 !evidence/package-*.png

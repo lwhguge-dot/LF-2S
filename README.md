@@ -1,4 +1,4 @@
-# LF-2S 上位机 · 0.3.0 ESP32 实物台架
+# LF-2S 上位机 · 0.3.1 ESP32 实物台架
 
 面向自用与教学的 Windows 桌面上位机。0.3.0 增加真实 ESP32-S3 / OV5640 台架页面：板卡诊断、800×600 JPEG 预览和重新对焦。STM32 尚未接入，真实高度、姿态、位置和电压为未知，飞行动作关闭。原 S0–S2 本机模拟任务与只读回放继续保留，使用独立模拟端点和现有 MAVLink 2 协议。
 
@@ -10,7 +10,9 @@ Windows 目录包随 GitHub 预览版本发布。本机构建可打开 `release/
 
 ## 直接运行 Windows 目录包
 
-从 [v0.3.0 预览版](https://github.com/lwhguge-dot/LF-2S/releases/tag/v0.3.0) 下载 `LF2S-Station-0.3.0-win-x64.zip`；本机构建以 `release/latest.json` 为准。完整解压并保留整个目录；无需另装 Node 或 Python。软件未签名，尚无安装器。
+从 [v0.3.1 预览版](https://github.com/lwhguge-dot/LF-2S/releases/tag/v0.3.1) 下载 `LF2S-Station-0.3.1-win-x64.zip`；本机构建以 `release/latest.json` 为准。完整解压并保留整个目录；无需另装 Node 或 Python。软件未签名，尚无安装器。
+
+0.3.1 修复预览传输偶尔超过 2 秒后被永久判为断开的故障：显示请求允许最多 6 秒，临时异常清空画面并最多核对三次当前流，成功后继续预览；板卡重启/流变化、身份和 JPEG 校验错误仍须手动重连，对焦命令不自动重发。详见 [稳定性排查记录](docs/07_预览稳定性排查.md)。
 
 本机构建产物位于 release/，多次构建时以 release/latest.json 为准。
 

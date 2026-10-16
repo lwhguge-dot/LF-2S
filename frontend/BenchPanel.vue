@@ -43,6 +43,7 @@ const status = computed(() =>
     : {
         disconnected: "未连接实物",
         connecting: "正在读取板卡",
+        recovering: "传输暂时中断 · 正在恢复",
         online: "实物相机在线",
         error: "连接已失效",
       }[bench.value?.phase || "disconnected"],
@@ -104,6 +105,7 @@ async function preview() {
     imageURL.value = url;
     imageMeta.value = frame;
     imageAt.value = performance.now();
+    message.value = "";
   } catch (error) {
     if (alive && requestEpoch === epoch) {
       clearImage();
@@ -249,6 +251,12 @@ onUnmounted(() => {
           <dd>
             {{ health ? `0x${health.autofocus_status.toString(16)}` : "未知" }}
           </dd>
+          <dt>传输异常 / 恢复</dt>
+          <dd>
+            {{ bench?.transport_failures ?? 0 }} / {{ bench?.recoveries ?? 0 }}
+          </dd>
+          <dt v-if="bench?.last_error">最近失败用时</dt>
+          <dd v-if="bench?.last_error">{{ bench.last_error.elapsed_ms }} ms</dd>
           <dt>图像尺寸</dt>
           <dd>
             {{

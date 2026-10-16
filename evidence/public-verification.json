@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
   "backend": {
-    "tests": 60,
+    "tests": 65,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -41,7 +41,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "17578462965378322695"
+        "client_nonce": "13139976711191656039"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -198,7 +198,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "14402061689860150499"
+        "client_nonce": "10015420621056434795"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -378,6 +378,34 @@
       "checks": 18,
       "frames": 12,
       "firmware": "0.1.4"
+    }
+  },
+  "preview_stability": {
+    "application_version": "0.3.1",
+    "firmware": "0.1.4",
+    "hardware": "paired ESP32-S3 / OV5640",
+    "scope": "One-minute display bench on the same host; no long-term radio, optical timing, FC or flight acceptance",
+    "baseline": {
+      "application_version": "0.3.0",
+      "elapsed_ms": 9735,
+      "frames": 5,
+      "errors": 1,
+      "phase_after": "error",
+      "wifi_connected_after_failure": true
+    },
+    "fixed": {
+      "elapsed_ms": 60125,
+      "frames": 54,
+      "errors": 0,
+      "phase_after": "online",
+      "max_request_ms": 2656,
+      "requests_exceeding_two_seconds": 6,
+      "wifi_restored": true
+    },
+    "raw_evidence_sha256": {
+      "baseline.json": "becacc463844737ae28b685b2473a5e259f9dd7ae1534e067ca5d2818624c335",
+      "fixed.json": "13ac7802da06e1385ffb6fce2e2305569d7a8273753f1b22ef1b0ceb31b438c7",
+      "baseline-serial.log": "6f2d7647065bcd80b0062584b560ad542436feb1bccc046e2ab7764b7019b165"
     }
   }
 }

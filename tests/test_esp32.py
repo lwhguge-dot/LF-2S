@@ -21,6 +21,7 @@ from lf2s_protocol.wire import ProtocolError  # noqa: E402
 from service.app import create_app  # noqa: E402
 from service.esp32 import (  # noqa: E402
     Esp32Bench,
+    TransportError,
     health_data,
     http_request,
     preview_data,
@@ -189,6 +190,108 @@ def test_focus_waits_for_health_poll_and_rejects_second_command(monkeypatch):
         assert await focus == {"accepted": True, "focused": False}
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("endpoint", ["preview", "focus"])
+def test_transient_failure_recovers_same_stream_without_replaying_focus(monkeypatch, endpoint):
+    board = Board()
+    failed = False
+
+    def request(*args):
+        nonlocal failed
+        if args[3].startswith("/" + endpoint) and not failed:
+            failed = True
+            board.calls.append(args)
+            raise TransportError("response_timeout", elapsed_ms=6000)
+        return board.request(*args)
+
+    monkeypatch.setattr("service.esp32.http_request", request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        paired = bench.paired_stream
+        with pytest.raises(ProtocolError):
+            await (bench.preview() if endpoint == "preview" else bench.focus())
+        assert bench.phase == "recovering" and bench.health is None and bench.paired_stream == paired
+        assert bench.snapshot()["last_error"]["elapsed_ms"] == 6000
+        bench.retry_at = 0
+        await bench.refresh()
+        assert bench.phase == "online" and bench.recoveries == 1
+        jpeg, headers = await bench.preview()
+        assert jpeg.startswith(b"\xff\xd8") and headers["X-LF2S-Stream-Id"] == paired
+        if endpoint == "focus":
+            assert len([call for call in board.calls if call[2] == "POST"]) == 1
+
+    asyncio.run(run())
+
+
+def test_recovery_stops_after_three_transport_failures(monkeypatch):
+    board = Board()
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+
+    def unavailable(*args):
+        raise TransportError("connection_interrupted", os_error=10054)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        monkeypatch.setattr("service.esp32.http_request", unavailable)
+        for index in range(3):
+            bench.retry_at = 0
+            with pytest.raises(ProtocolError):
+                await bench.refresh()
+            assert bench.phase == ("recovering" if index < 2 else "error")
+        await bench.refresh()
+        assert bench.transport_failures == 3 and bench.health is None
+        with pytest.raises(ProtocolError):
+            await bench.preview()
+
+    asyncio.run(run())
+
+
+def test_recovery_does_not_adopt_rebooted_stream(monkeypatch):
+    board = Board()
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        original = bench.paired_stream
+        bench.recover("GET", "/preview?request_id=1", TransportError("response_timeout"))
+        board.health["camera_stream_id"] = "18446744073709551615"
+        bench.retry_at = 0
+        with pytest.raises(ProtocolError, match="代数"):
+            await bench.refresh()
+        assert bench.phase == "error" and bench.paired_stream == original and bench.health is None
+
+    asyncio.run(run())
+
+
+def test_preview_transfer_can_exceed_two_seconds_without_dropping_connection():
+    code, headers, jpeg = jpeg_reply()
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+
+    def slow_frame():
+        owned, _ = server.accept()
+        with owned:
+            owned.recv(4096)
+            head = f"HTTP/1.1 {code} OK\r\n" + "".join(f"{k}: {v}\r\n" for k, v in headers.items()) + "\r\n"
+            owned.sendall(head.encode() + jpeg[:100])
+            time.sleep(2.2)
+            owned.sendall(jpeg[100:])
+
+    thread = threading.Thread(target=slow_frame, daemon=True)
+    thread.start()
+    try:
+        status, observed, data = http_request("127.0.0.1", server.getsockname()[1], "GET", "/preview?request_id=1", 262144)
+        assert status == 200 and data == jpeg
+        assert preview_data(observed, data, health()["camera_stream_id"], 1, health(), (0, 0))[:2] == (1, 9007199254740997)
+    finally:
+        server.close()
+        thread.join(3)
 
 
 def test_api_simulation_replay_and_real_board_isolation(tmp_path, monkeypatch):

@@ -16,6 +16,7 @@ PUBLIC_EVIDENCE = (
     "验收报告.md",
     "acceptance.json",
     "public-verification.json",
+    "preview-stability-summary.json",
     "package-overview.png",
     "package-stale.png",
     "package-logs.png",

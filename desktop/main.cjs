@@ -111,7 +111,7 @@ async function request(route, method = "GET", body, binary = false) {
       },
     );
     req.setTimeout(
-      binary === "real" || route.startsWith("bench/") ? 7000 : 4000,
+      binary === "real" || route.startsWith("bench/") ? 12000 : 4000,
       () => req.destroy(new Error("本地服务请求超时")),
     );
     req.on("error", reject);
