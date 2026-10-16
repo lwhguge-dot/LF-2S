@@ -17,4 +17,5 @@ evidence/*
 !evidence/acceptance.json
 !evidence/public-verification.json
 !evidence/preview-stability-summary.json
+!evidence/preview-performance-summary.json
 !evidence/package-*.png

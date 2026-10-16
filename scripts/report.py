@@ -39,6 +39,10 @@ def main():
     stability = json.loads(stability_path.read_text("utf-8")) if stability_path.exists() else None
     if stability and stability.get("application_version") != VERSION:
         stability = None
+    performance_path = evidence / "preview-performance-summary.json"
+    performance = json.loads(performance_path.read_text("utf-8")) if performance_path.exists() else None
+    if performance and performance.get("application_version") != VERSION:
+        performance = None
     stability_note = (
         f"修复前约 {stability['baseline']['elapsed_ms'] / 1000:.3f} 秒、{stability['baseline']['frames']} 张图后失效；"
         f"修复后 {stability['fixed']['elapsed_ms'] / 1000:.3f} 秒连续收到 {stability['fixed']['frames']} 张图，"
@@ -79,6 +83,7 @@ def main():
         "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
         "esp32_display_bench": physical,
         "preview_stability": stability,
+        "preview_performance": performance,
     }
     (evidence / "acceptance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), "utf-8"
@@ -97,6 +102,7 @@ def main():
         "cleanup_passed": cleanup["passed"],
         "esp32_display_bench": physical,
         "preview_stability": stability,
+        "preview_performance": performance,
     }
     (evidence / "public-verification.json").write_text(
         json.dumps(public, ensure_ascii=False, indent=2) + "\n", "utf-8"
@@ -141,6 +147,8 @@ def main():
 {stability_note}
 
 上述持续预览数据来自随源码保留的本机实板摘要，默认软件验收不重复操作硬件。原始负载和连接条件不能据此视为完全相同；不宣称吞吐改善比例或长期无线性能。修复与回归范围见 docs/07；临时恢复不接纳新流或重发对焦/飞行动作。
+
+本版多档图传与显示频率结果见 preview-performance-summary.json 和 docs/08。帧率上限、实际接收、实际显示与传感器板内短测分别记录；这些结果不产生识别率、光学时序或真实控制资格。
 
 公开仓库只保留 public-verification.json、acceptance.json、本报告和截图；JUnit、完整运行报告与进程记录由复验生成，不把本机绝对路径和主机名带入公开发布。
 

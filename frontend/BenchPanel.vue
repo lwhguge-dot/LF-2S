@@ -9,6 +9,14 @@ const port = ref(80);
 const busy = ref(false);
 const reading = ref(false);
 const auto = ref(true);
+const targetFps = ref(10);
+const size = ref<"qvga" | "vga" | "svga">("vga");
+const colour = ref<"driver" | "office">("driver");
+const displayTimes = ref<number[]>([]);
+const requestToDisplay = ref<number | null>(null);
+let requestStarted = 0;
+let imageRequestStarted = 0;
+let lastRequestAt = 0;
 const message = ref("");
 const imageURL = ref("");
 const imageMeta = ref<RealCapture | null>(null);
@@ -27,6 +35,15 @@ const online = computed(
 );
 const fresh = computed(
   () => online.value && !!imageURL.value && now.value - imageAt.value < 2000,
+);
+const receivedFps = computed(() => {
+  const recent = displayTimes.value.filter((t) => t >= now.value - 5000);
+  return fresh.value && recent.length >= 2
+    ? ((recent.length - 1) * 1000) / (recent.at(-1)! - recent[0]!)
+    : null;
+});
+const settingsAvailable = computed(
+  () => online.value && Number(health.value?.firmware.split(".")[2]) >= 5,
 );
 const focusText = computed(() =>
   !health.value?.autofocus_initialized
@@ -55,6 +72,9 @@ function clearImage() {
   imageURL.value = "";
   imageMeta.value = null;
   imageAt.value = 0;
+  displayTimes.value = [];
+  requestToDisplay.value = null;
+  lastRequestAt = 0;
 }
 async function run(action: () => Promise<unknown>, success: string) {
   if (busy.value) return;
@@ -88,6 +108,8 @@ async function preview() {
   const requestEpoch = epoch;
   const boardEpoch = bench.value?.epoch;
   reading.value = true;
+  requestStarted = performance.now();
+  lastRequestAt = requestStarted;
   try {
     const frame = await bridge.benchPreview();
     if (
@@ -101,9 +123,22 @@ async function preview() {
     const url = URL.createObjectURL(
       new Blob([Uint8Array.from(frame.bytes).buffer], { type: "image/jpeg" }),
     );
+    try {
+      const decoded = new Image();
+      decoded.src = url;
+      await decoded.decode();
+    } catch {
+      URL.revokeObjectURL(url);
+      throw new Error("浏览器无法解码这张 JPEG");
+    }
+    if (!alive || requestEpoch !== epoch || !online.value) {
+      URL.revokeObjectURL(url);
+      return;
+    }
     if (imageURL.value) URL.revokeObjectURL(imageURL.value);
     imageURL.value = url;
     imageMeta.value = frame;
+    imageRequestStarted = requestStarted;
     imageAt.value = performance.now();
     message.value = "";
   } catch (error) {
@@ -114,6 +149,30 @@ async function preview() {
   } finally {
     reading.value = false;
   }
+}
+function imageLoaded() {
+  if (!fresh.value || !imageMeta.value) return;
+  const at = performance.now();
+  displayTimes.value = [
+    ...displayTimes.value.filter((t) => t >= at - 5000),
+    at,
+  ];
+  requestToDisplay.value = Math.round(at - imageRequestStarted);
+}
+async function waitForPreview() {
+  const end = performance.now() + 12000;
+  while (reading.value && alive && performance.now() < end)
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  if (!alive || reading.value) throw new Error("请稍后重新调整相机预览");
+}
+function settings() {
+  clearImage();
+  const selectedSize = size.value;
+  const selectedColour = colour.value;
+  return run(async () => {
+    await waitForPreview();
+    return bridge.benchSettings(selectedSize, selectedColour);
+  }, "预览设置已核对，继续读取新画面");
 }
 function focus() {
   return run(bridge.benchFocus, "重新对焦请求已接受；请观察画面与传感器状态");
@@ -128,9 +187,24 @@ watch(
 onMounted(() => {
   timer = setInterval(() => {
     now.value = performance.now();
-    if (auto.value) void preview();
-  }, 750);
+    if (auto.value && now.value - lastRequestAt >= 1000 / targetFps.value)
+      void preview();
+  }, 25);
 });
+watch(
+  [() => health.value?.preview_width, () => health.value?.preview_colour],
+  () => {
+    const value = health.value;
+    if (!value) return;
+    size.value =
+      value.preview_width === 320
+        ? "qvga"
+        : value.preview_width === 800
+          ? "svga"
+          : "vga";
+    colour.value = value.preview_colour === 2 ? "office" : "driver";
+  },
+);
 onUnmounted(() => {
   alive = false;
   clearInterval(timer);
@@ -152,6 +226,7 @@ onUnmounted(() => {
           alt="ESP32 OV5640 实际拍摄画面"
           data-testid="real-image"
           @error="clearImage"
+          @load="imageLoaded"
         />
         <div v-else class="bench-placeholder" data-testid="real-image-empty">
           <strong>{{ imageURL ? "图像已过期" : "等待实物图像" }}</strong>
@@ -173,6 +248,14 @@ onUnmounted(() => {
         <label class="check"
           ><input v-model="auto" type="checkbox" />连续预览</label
         >
+        <label class="preview-option"
+          >预览频率
+          <select v-model.number="targetFps" aria-label="预览频率">
+            <option :value="10">尽快读取 · 上限 10 FPS</option>
+            <option :value="5">上限 5 FPS</option>
+            <option :value="1">1 FPS · 静态查看</option>
+          </select>
+        </label>
         <button :disabled="!online || reading || busy" @click="preview">
           读取实物图像
         </button>
@@ -185,8 +268,75 @@ onUnmounted(() => {
           重新对焦
         </button>
       </div>
+      <div class="bench-metrics" data-testid="preview-metrics">
+        <span
+          >实际显示
+          <strong
+            >{{
+              receivedFps === null ? "—" : receivedFps.toFixed(1)
+            }}
+            FPS</strong
+          ></span
+        >
+        <span
+          >请求至显示
+          <strong
+            >{{ requestToDisplay === null ? "—" : requestToDisplay }} ms</strong
+          ></span
+        >
+        <span
+          >JPEG
+          <strong
+            >{{
+              imageMeta ? (imageMeta.bytes.length / 1024).toFixed(1) : "—"
+            }}
+            KiB</strong
+          ></span
+        >
+        <span
+          >板端等帧
+          <strong
+            >{{
+              imageMeta?.camera_wait_ms == null
+                ? "—"
+                : Math.round(imageMeta.camera_wait_ms)
+            }}
+            ms</strong
+          ></span
+        >
+      </div>
+      <div class="preview-settings">
+        <label
+          >画面尺寸
+          <select
+            v-model="size"
+            :disabled="!settingsAvailable || busy"
+            aria-label="画面尺寸"
+          >
+            <option value="qvga">320 × 240 · 优先流畅</option>
+            <option value="vga">640 × 480 · 均衡</option>
+            <option value="svga">800 × 600 · 查看细节</option>
+          </select>
+        </label>
+        <label
+          >白平衡
+          <select
+            v-model="colour"
+            :disabled="!settingsAvailable || busy"
+            aria-label="白平衡"
+          >
+            <option value="driver">自动</option>
+            <option value="office">室内灯光</option>
+          </select>
+        </label>
+        <button :disabled="!settingsAvailable || busy" @click="settings">
+          应用画面设置
+        </button>
+      </div>
       <p class="bench-note">
-        预览刷新速度与图像接收年龄用于显示；尚未完成曝光时序、相机标定与视觉控制验收。
+        实际显示帧率取最近 5
+        秒内的到图间隔；上限不保证达到。请求至显示包含拍摄等待、传输与解码，不等于曝光时延。静态查看可选
+        1 FPS，运动识别需要更多连续画面。
       </p>
     </article>
     <div class="bench-sidebar">
@@ -255,6 +405,8 @@ onUnmounted(() => {
           <dd>
             {{ bench?.transport_failures ?? 0 }} / {{ bench?.recoveries ?? 0 }}
           </dd>
+          <dt>相机忙响应</dt>
+          <dd>{{ bench?.camera_busy_responses ?? 0 }}</dd>
           <dt v-if="bench?.last_error">最近失败用时</dt>
           <dd v-if="bench?.last_error">{{ bench.last_error.elapsed_ms }} ms</dd>
           <dt>图像尺寸</dt>
@@ -267,6 +419,14 @@ onUnmounted(() => {
           </dd>
           <dt>PSRAM</dt>
           <dd>{{ health ? `${health.psram_bytes / 1048576} MiB` : "未知" }}</dd>
+          <dt>当前模拟增益</dt>
+          <dd>
+            {{
+              health?.sensor_diagnostics?.valid
+                ? `${(health.sensor_diagnostics.gain_q4 / 16).toFixed(1)}×`
+                : "未知"
+            }}
+          </dd>
           <dt>UDP 校验 / 拒绝</dt>
           <dd>
             {{
@@ -303,7 +463,7 @@ onUnmounted(() => {
 .bench-stage {
   position: relative;
   background: #060c11;
-  aspect-ratio: 4/3;
+  height: clamp(220px, 45vh, 600px);
   display: grid;
   place-items: center;
 }
@@ -333,6 +493,35 @@ onUnmounted(() => {
 .bench-note {
   padding: 12px 18px;
   font-size: 12px;
+}
+.bench-metrics,
+.preview-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 12px 18px;
+  border-top: 1px solid #23313d;
+  color: #9dbecc;
+  font-size: 12px;
+}
+.bench-metrics strong {
+  color: #dce8ee;
+  font-weight: 500;
+}
+.preview-settings {
+  align-items: end;
+}
+.preview-option,
+.preview-settings label {
+  display: grid;
+  gap: 5px;
+}
+select {
+  background: #101c26;
+  border: 1px solid #31424d;
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: #dce8ee;
 }
 .bench-sidebar {
   display: grid;

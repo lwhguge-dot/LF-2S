@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld(
     benchDisconnect: () => ipcRenderer.invoke("station:benchDisconnect"),
     benchFocus: () => ipcRenderer.invoke("station:benchFocus"),
     benchPreview: () => ipcRenderer.invoke("station:benchPreview"),
+    benchSettings: (size, colour) =>
+      ipcRenderer.invoke("station:benchSettings", size, colour),
     restart: () => ipcRenderer.invoke("station:restart"),
     openLogs: () => ipcRenderer.invoke("station:open-logs"),
     onState: (callback) => {

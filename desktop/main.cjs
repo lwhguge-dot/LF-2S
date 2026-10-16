@@ -132,6 +132,12 @@ async function request(route, method = "GET", body, binary = false) {
     const height = Number(h["x-lf2s-height"]);
     const frame = Number(h["x-lf2s-frame-id"]);
     const epoch = Number(h["x-lf2s-epoch"]);
+    const roundtrip = Number(h["x-lf2s-roundtrip-ms"]);
+    const decode = Number(h["x-lf2s-decode-ms"]);
+    const cameraWait =
+      h["x-lf2s-camera-wait-ms"] === undefined
+        ? null
+        : Number(h["x-lf2s-camera-wait-ms"]);
     const validU64 = (s) =>
       typeof s === "string" &&
       /^[1-9][0-9]{0,19}$/.test(s) &&
@@ -146,6 +152,10 @@ async function request(route, method = "GET", body, binary = false) {
       h["x-lf2s-display-only"] !== "1" ||
       h["x-lf2s-hardware-qualified"] !== "0" ||
       h["x-lf2s-capture-after-request"] !== "0" ||
+      h["x-lf2s-test-pattern"] !== "0" ||
+      ![roundtrip, decode, ...(cameraWait === null ? [] : [cameraWait])].every(
+        (v) => Number.isFinite(v) && v >= 0 && v <= 20000,
+      ) ||
       !validU64(h["x-lf2s-stream-id"]) ||
       !validU64(h["x-lf2s-capture-us"]) ||
       !Number.isInteger(frame) ||
@@ -168,6 +178,9 @@ async function request(route, method = "GET", body, binary = false) {
       display_only: true,
       hardware_freshness_qualified: false,
       received_at: Date.now(),
+      roundtrip_ms: roundtrip,
+      decode_ms: decode,
+      camera_wait_ms: cameraWait,
     };
   }
   const length = Number(response.headers["content-length"]);
@@ -437,6 +450,15 @@ async function boot() {
   ipcMain.handle("station:benchPreview", (event) => {
     validate(event);
     return request("bench/preview", "GET", undefined, "real");
+  });
+  ipcMain.handle("station:benchSettings", (event, size, colour) => {
+    validate(event);
+    if (
+      !["qvga", "vga", "svga"].includes(size) ||
+      !["driver", "office"].includes(colour)
+    )
+      throw new Error("不支持的预览设置");
+    return request("bench/settings", "POST", { size, colour });
   });
   ipcMain.handle("station:open-logs", (event) => {
     validate(event);

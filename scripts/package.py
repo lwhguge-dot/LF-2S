@@ -17,6 +17,7 @@ PUBLIC_EVIDENCE = (
     "acceptance.json",
     "public-verification.json",
     "preview-stability-summary.json",
+    "preview-performance-summary.json",
     "package-overview.png",
     "package-stale.png",
     "package-logs.png",

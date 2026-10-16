@@ -222,7 +222,7 @@ async function main() {
       isolation.node === "undefined" &&
         isolation.process === "undefined" &&
         isolation.keys.join(",") ===
-          "benchConnect,benchDisconnect,benchFocus,benchPreview,connect,disconnect,image,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart" &&
+          "benchConnect,benchDisconnect,benchFocus,benchPreview,benchSettings,connect,disconnect,image,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart" &&
         prefs.contextIsolation &&
         prefs.sandbox &&
         !prefs.nodeIntegration &&

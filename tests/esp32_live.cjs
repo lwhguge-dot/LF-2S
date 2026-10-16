@@ -1,6 +1,7 @@
 // Opt-in paired-board bench. The calling helper owns Wi-Fi restoration.
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { _electron } = require("playwright");
 const root = path.resolve(__dirname, "..");
 const packaged = process.argv.includes("--packaged");
@@ -12,6 +13,7 @@ const report = {
     fs.readFileSync(path.join(root, "package.json"), "utf8"),
   ).version,
   physical_esp32: true,
+  transport: "serialized_http_keepalive",
   hardware_control_allowed: false,
   scope:
     "Paired ESP32 HTTP diagnostics, JPEG display and focus request; no STM32 or flight",
@@ -58,6 +60,21 @@ async function main() {
           ).directory,
         )
       : root;
+    report.provider_sha256_lf = packaged
+      ? JSON.parse(
+          fs.readFileSync(
+            path.join(distribution, "bundle-manifest.json"),
+            "utf8",
+          ),
+        ).source_sha256_lf["service/esp32.py"]
+      : crypto
+          .createHash("sha256")
+          .update(
+            fs
+              .readFileSync(path.join(root, "service/esp32.py"), "utf8")
+              .replaceAll("\r\n", "\n"),
+          )
+          .digest("hex");
     instance = await _electron.launch({
       executablePath: packaged
         ? path.join(distribution, "LF2S-Station.exe")
@@ -107,9 +124,7 @@ async function main() {
         .getByTestId("real-image")
         .evaluate(
           (img) =>
-            img.complete &&
-            img.naturalWidth === 800 &&
-            img.naturalHeight === 600,
+            img.complete && img.naturalWidth > 0 && img.naturalHeight > 0,
         ),
     );
     check(
@@ -129,14 +144,6 @@ async function main() {
       .getByText("重新对焦请求已接受；请观察画面与传感器状态", { exact: true })
       .waitFor();
     check("focus_acceptance_is_distinct_from_completion", true);
-    await page.getByLabel("连续预览", { exact: true }).check();
-    await until(
-      async () =>
-        !(await page
-          .getByRole("button", { name: "读取实物图像", exact: true })
-          .isDisabled()),
-      "image_request_still_busy",
-    );
     const frames = [];
     const started = performance.now();
     // Same backend/IPC route as the UI; no renderer network access.
@@ -154,8 +161,12 @@ async function main() {
           frame.hardware_freshness_qualified === false &&
           typeof frame.stream_id === "string" &&
           typeof frame.capture_us === "string" &&
-          frame.width === 800 &&
-          frame.height === 600 &&
+          frame.width === state.bench.health.preview_width &&
+          frame.height === state.bench.health.preview_height &&
+          Number.isFinite(frame.roundtrip_ms) &&
+          frame.roundtrip_ms >= 0 &&
+          Number.isFinite(frame.decode_ms) &&
+          frame.decode_ms >= 0 &&
           frame.bytes >= 4 &&
           frame.bytes <= 262144 &&
           (!frames.length ||
@@ -169,6 +180,68 @@ async function main() {
     report.elapsed_ms = Math.round(performance.now() - started);
     await page.getByLabel("连续预览", { exact: true }).check();
     await page.getByTestId("real-image").waitFor({ timeout: 7000 });
+    if (Number(state.bench.health.firmware.split(".")[2]) >= 5) {
+      const before = (await page.evaluate(() => window.lf2s.state())).bench
+        .health.camera_stream_id;
+      await page.getByLabel("画面尺寸", { exact: true }).selectOption("qvga");
+      await page.getByLabel("白平衡", { exact: true }).selectOption("driver");
+      await page
+        .getByRole("button", { name: "应用画面设置", exact: true })
+        .click();
+      await until(
+        async () => {
+          const b = (await page.evaluate(() => window.lf2s.state())).bench;
+          return b.phase === "online" && b.health?.preview_width === 320;
+        },
+        "qvga_settings_not_verified",
+        16000,
+      );
+      const configured = (await page.evaluate(() => window.lf2s.state())).bench;
+      check(
+        "explicit_settings_advance_stream_and_keep_fc_disabled",
+        BigInt(configured.health.camera_stream_id) === BigInt(before) + 1n &&
+          !configured.hardware_control_allowed &&
+          configured.health.preview_colour === 0,
+      );
+      await page.getByLabel("预览频率", { exact: true }).selectOption("1");
+      const seen = new Set();
+      const observeStart = performance.now();
+      while (performance.now() - observeStart < 5000) {
+        seen.add(await page.getByTestId("real-frame").innerText());
+        await delay(100);
+      }
+      report.one_fps = {
+        seconds: (performance.now() - observeStart) / 1000,
+        displayed_changes: seen.size,
+      };
+      check(
+        "one_fps_mode_caps_new_display_frames",
+        seen.size >= 2 && seen.size <= 7,
+      );
+      await page.getByLabel("画面尺寸", { exact: true }).selectOption("vga");
+      await page
+        .getByRole("button", { name: "应用画面设置", exact: true })
+        .click();
+      await until(
+        async () => {
+          const b = (await page.evaluate(() => window.lf2s.state())).bench;
+          return b.phase === "online" && b.health?.preview_width === 640;
+        },
+        "vga_settings_not_verified",
+        16000,
+      );
+      await page.getByLabel("预览频率", { exact: true }).selectOption("10");
+      await delay(6000);
+      report.preview_metrics = await page
+        .getByTestId("preview-metrics")
+        .innerText();
+      check(
+        "actual_frame_rate_and_latency_are_visible",
+        !report.preview_metrics.includes("— FPS") &&
+          /\d+(\.\d+)? FPS/.test(report.preview_metrics) &&
+          /\d+ ms/.test(report.preview_metrics),
+      );
+    }
     await page.screenshot({
       path: path.join(output, `esp32-${suffix}-live.png`),
     });

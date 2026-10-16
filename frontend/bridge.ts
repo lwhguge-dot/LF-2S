@@ -114,6 +114,7 @@ export interface Bench {
   health_age_ms: number | null;
   transport_failures: number;
   recoveries: number;
+  camera_busy_responses: number;
   last_error: {
     code: string;
     endpoint: string;
@@ -140,6 +141,27 @@ export interface Bench {
     udp_received: number;
     udp_validated: number;
     udp_rejected: number;
+    preview_colour?: number | null;
+    test_pattern?: boolean | null;
+    sensor_bench_frames?: number | null;
+    sensor_bench_us?: number | null;
+    capture_wait_us?: number | null;
+    send_us?: number | null;
+    sensor_diagnostics?: {
+      valid: boolean;
+      exposure_lines: number;
+      gain_q4: number;
+      gain_ceiling_q4: number;
+      wb_r_q10: number;
+      wb_g_q10: number;
+      wb_b_q10: number;
+      manual_control: number;
+      isp_control: number;
+      sde_control: number;
+      sde_u: number;
+      sde_v: number;
+      luminance: number;
+    } | null;
   } | null;
 }
 export interface RealCapture {
@@ -154,6 +176,9 @@ export interface RealCapture {
   display_only: true;
   hardware_freshness_qualified: false;
   received_at: number;
+  roundtrip_ms: number;
+  decode_ms: number;
+  camera_wait_ms: number | null;
 }
 export interface Recording {
   id: string;
@@ -193,6 +218,10 @@ export interface DesktopBridge {
   benchDisconnect(): Promise<Bench>;
   benchFocus(): Promise<{ accepted: boolean; focused: false }>;
   benchPreview(): Promise<RealCapture>;
+  benchSettings(
+    size: "qvga" | "vga" | "svga",
+    colour: "driver" | "office",
+  ): Promise<Bench>;
   restart(): Promise<unknown>;
   openLogs(): Promise<string>;
   onState(callback: (state: State) => void): () => void;

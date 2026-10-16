@@ -1,0 +1,171 @@
+{
+  "created_at": "2026-10-16T14:58:41.718242+00:00",
+  "application_version": "0.4.0",
+  "firmware": "0.1.5",
+  "hardware": "paired ESP32-S3 / OV5640",
+  "provider_sha256_lf": "cd33c6a94852208e2faa0fe059eb06c1da6839827ce4f2617c4ec9404c93479f",
+  "firmware_app_sha256": "5f9c419690757b2ccdc8e6e93c24548ac40a9a55d5f1b5753effbb1b631cfc12",
+  "scope": "Finite local display-only JPEG and desktop measurements; no recognition, optical timing, range or flight acceptance",
+  "historical_baseline": {
+    "application_version": "0.3.1",
+    "firmware": "0.1.4",
+    "frames": 54,
+    "elapsed_ms": 60125,
+    "received_fps": 0.898,
+    "comparable_scene_and_lighting": false
+  },
+  "direct_http_modes": {
+    "qvga": {
+      "width": 320,
+      "height": 240,
+      "jpeg_quantizer": 16,
+      "http_keepalive": true,
+      "frames": 101,
+      "elapsed_ms": 12015.0,
+      "busy_responses": 0,
+      "received_fps": 8.406,
+      "http_ms": {
+        "mean": 106.06,
+        "median": 98.93,
+        "p95": 177.72,
+        "max": 232.34
+      },
+      "jpeg_bytes": {
+        "mean": 6153.74,
+        "median": 6131,
+        "p95": 6160,
+        "max": 8463
+      },
+      "wifi_restored": true
+    },
+    "vga": {
+      "width": 640,
+      "height": 480,
+      "jpeg_quantizer": 12,
+      "http_keepalive": true,
+      "frames": 71,
+      "elapsed_ms": 12921.0,
+      "busy_responses": 0,
+      "received_fps": 5.495,
+      "http_ms": {
+        "mean": 170.51,
+        "median": 111.21,
+        "p95": 390.64,
+        "max": 1978.98
+      },
+      "jpeg_bytes": {
+        "mean": 27877.69,
+        "median": 27878,
+        "p95": 28025,
+        "max": 28096
+      },
+      "wifi_restored": true,
+      "api_gates": {
+        "passed": true,
+        "cases": 8
+      }
+    },
+    "svga": {
+      "width": 800,
+      "height": 600,
+      "jpeg_quantizer": 10,
+      "http_keepalive": true,
+      "frames": 77,
+      "elapsed_ms": 12062.0,
+      "busy_responses": 0,
+      "received_fps": 6.384,
+      "http_ms": {
+        "mean": 151.34,
+        "median": 146.88,
+        "p95": 241.03,
+        "max": 350.08
+      },
+      "jpeg_bytes": {
+        "mean": 50258.86,
+        "median": 50202,
+        "p95": 50678,
+        "max": 50898
+      },
+      "wifi_restored": true
+    }
+  },
+  "sustained_vga": {
+    "width": 640,
+    "height": 480,
+    "frames": 398,
+    "elapsed_ms": 60047,
+    "received_fps": 6.628,
+    "errors": 0,
+    "error_details": [],
+    "busy_responses": 0,
+    "phase_after": "online",
+    "wifi_restored": true,
+    "request_ms": {
+      "mean": 144.24,
+      "median": 125.0,
+      "p95": 250,
+      "max": 500
+    },
+    "camera_wait_ms": {
+      "mean": 2.46,
+      "median": 1.28,
+      "p95": 11.07,
+      "max": 32.41
+    },
+    "jpeg_bytes": {
+      "mean": 27690.38,
+      "median": 27663.5,
+      "p95": 27929,
+      "max": 28121
+    },
+    "camera_failure_counter_delta": 0,
+    "same_camera_stream": true
+  },
+  "desktop": {
+    "dev": {
+      "passed": true,
+      "checks": 21,
+      "frames": 12,
+      "observed_metrics": "实际显示 6.5 FPS\n请求至显示 75 ms\nJPEG 27.4 KiB\n板端等帧 1 ms",
+      "one_fps": {
+        "seconds": 5.0161654,
+        "displayed_changes": 6
+      }
+    },
+    "package": {
+      "passed": true,
+      "checks": 21,
+      "frames": 12,
+      "observed_metrics": "实际显示 6.3 FPS\n请求至显示 117 ms\nJPEG 27.5 KiB\n板端等帧 16 ms",
+      "one_fps": {
+        "seconds": 5.006173199999999,
+        "displayed_changes": 6
+      }
+    }
+  },
+  "sensor_only_short_test": {
+    "frames": 20,
+    "timestamp_span_us": 855865,
+    "fps": 22.2,
+    "includes_wifi": false
+  },
+  "image_quality": {
+    "user_accepted_reference_sha256": "08eb1f16b1893b74a1e47272664d6f501e625a2f978224599f78103b244ec576",
+    "profile": "driver_normal_auto_white_balance",
+    "quantitative_optical_acceptance": false,
+    "analogue_gain_observed_x": 15.5,
+    "note": "User accepted one tissue-package reference. Later samples still show indoor noise and colour variation; no proof of phone-equivalent quality or stable recognition."
+  },
+  "hardware_control_allowed": false,
+  "stm32_connected": false,
+  "raw_evidence_sha256": {
+    "03_esp32_idf/evidence/hardware/20261016-image-quality/final2-015-qvga/report.json": "c06205d6d3ab03999a8f24b959248a4cf0ef80813708fe2230dde1bd681c29c2",
+    "03_esp32_idf/evidence/hardware/20261016-image-quality/final2-015-vga/report.json": "aa6d871727f1af048b72c87f5c0bd39048c43fd569a7f88881f0dc1c3eeab3ef",
+    "03_esp32_idf/evidence/hardware/20261016-image-quality/final2-015-svga/report.json": "953646453b8455e76cc18a5d7e80a79811060920ef0dc1bfe8be603cf96804cf",
+    "03_esp32_idf/evidence/hardware/20261016-image-quality/persistent-040-final2.json": "ab40b342a5a255806dc2ffd408f6a358609b739961d069e887ed86bd87d2a993",
+    "05_上位机/evidence/esp32-dev-live.json": "942dd52258a9849fefd06706c314e8227820f70838452990cdb9a8b2a3e56a54",
+    "05_上位机/evidence/esp32-package-live.json": "a2b248a2dfadd80736bfdd174a26ff07652543c7a406270522cd1f5c0d2d96f8",
+    "03_esp32_idf/evidence/hardware/20261016-image-quality/flash-image-final2.json": "1852d478e1b263b36e18d77afc7d707a0f2d43179653af494016348cf8c48523",
+    "03_esp32_idf/evidence/hardware/20261016-image-quality/boot-final2.log": "3e21f3adbf8ddf779954a39f3b0110b9639a11ede7b674a4fe07a2b64372cfd7"
+  }
+}

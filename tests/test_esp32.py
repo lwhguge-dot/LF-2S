@@ -21,6 +21,7 @@ from lf2s_protocol.wire import ProtocolError  # noqa: E402
 from service.app import create_app  # noqa: E402
 from service.esp32 import (  # noqa: E402
     Esp32Bench,
+    HttpSession,
     TransportError,
     health_data,
     http_request,
@@ -68,7 +69,7 @@ class Board:
         self.calls = []
         self.frame = 0
 
-    def request(self, host, port, method, route, limit):
+    def request(self, host, port, method, route, limit, session=None):
         self.calls.append((host, port, method, route, limit))
         if route == "/health":
             return 200, {"content-type": "application/json"}, json.dumps(self.health).encode()
@@ -79,6 +80,242 @@ class Board:
         if route == "/focus":
             return 200, {"content-type": "application/json"}, b'{"accepted":true,"focused":false}'
         raise AssertionError(route)
+
+
+def modern_health():
+    return {**health(), "firmware": "0.1.5", "preview_colour": 0, "test_pattern": False,
+            "capture_wait_us": 80000, "queue_wait_us": 1000, "send_us": 400000,
+            "sensor_bench_frames": 20, "sensor_bench_us": 855000,
+            "sensor_diagnostics": {"valid": True, "exposure_lines": 885, "gain_q4": 248,
+                                   "gain_ceiling_q4": 248, "wb_r_q10": 1100, "wb_g_q10": 1024,
+                                   "wb_b_q10": 2000, "manual_control": 0, "isp_control": 163,
+                                   "sde_control": 6, "sde_u": 64, "sde_v": 64, "luminance": 50}}
+
+
+class SettingsBoard(Board):
+    def __init__(self):
+        super().__init__()
+        self.health = modern_health()
+        self.offset = 1
+
+    def request(self, host, port, method, route, limit, session=None):
+        if not route.startswith("/preview/config?"):
+            return super().request(host, port, method, route, limit, session)
+        self.calls.append((host, port, method, route, limit))
+        assert method == "POST" and "pattern=0" in route
+        assert "stream_id=" + self.health["camera_stream_id"] in route
+        size = route.split("size=")[1].split("&")[0]
+        width, height, quality = {"vga": (640, 480, 12), "qvga": (320, 240, 16), "svga": (800, 600, 10)}[size]
+        self.health.update(camera_stream_id=str(int(self.health["camera_stream_id"]) + self.offset),
+                           preview_width=width, preview_height=height, jpeg_quality=quality,
+                           preview_colour=2 if "colour=office" in route else 0)
+        return 200, {"content-type": "application/json"}, json.dumps(
+            {"accepted": True, "stream_id": self.health["camera_stream_id"], "test_pattern": False}
+        ).encode()
+
+
+def test_settings_change_stream_only_after_explicit_verified_configuration(monkeypatch):
+    board = SettingsBoard()
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        old_stream, old_epoch = bench.paired_stream, bench.epoch
+        answer = await bench.settings("vga", "driver")
+        assert answer["phase"] == "online" and bench.epoch > old_epoch
+        assert int(bench.paired_stream) == int(old_stream) + 1 == 2**64 - 1
+        assert bench.health["preview_width"] == 640 and bench.previous == (0, 0)
+        assert sum("/preview/config?" in row[3] for row in board.calls) == 1
+
+    asyncio.run(run())
+
+
+def test_settings_cannot_adopt_an_unexpected_boot_generation(monkeypatch):
+    board = SettingsBoard()
+    board.health["camera_stream_id"] = "9007199254740993"
+    board.offset = 2
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        with pytest.raises(ProtocolError):
+            await bench.settings("vga", "driver")
+        assert bench.phase == "error" and bench.health is None
+        assert bench.paired_stream == "9007199254740993"
+
+    asyncio.run(run())
+
+
+def test_ambiguous_settings_are_never_automatically_replayed(monkeypatch):
+    board = SettingsBoard()
+
+    def request(*args):
+        reply = board.request(*args)
+        if args[3].startswith("/preview/config?"):
+            raise TransportError("response_timeout", elapsed_ms=8000)
+        return reply
+
+    monkeypatch.setattr("service.esp32.http_request", request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        with pytest.raises(ProtocolError):
+            await bench.settings("vga", "driver")
+        assert bench.phase == "error" and bench.health is None
+        count = len(board.calls)
+        await bench.refresh()
+        assert len(board.calls) == count
+        assert sum("/preview/config?" in row[3] for row in board.calls) == 1
+
+    asyncio.run(run())
+
+
+def test_late_settings_result_cannot_restore_a_disconnected_board(monkeypatch):
+    board = SettingsBoard()
+    entered, release = threading.Event(), threading.Event()
+
+    def request(*args):
+        if args[3].startswith("/preview/config?"):
+            entered.set()
+            assert release.wait(2)
+        return board.request(*args)
+
+    monkeypatch.setattr("service.esp32.http_request", request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        pending = asyncio.create_task(bench.settings("vga", "driver"))
+        assert await asyncio.to_thread(entered.wait, 1)
+        bench.disconnect()
+        release.set()
+        with pytest.raises(ProtocolError):
+            await pending
+        assert bench.phase == "disconnected" and bench.health is None and not bench.active
+
+    asyncio.run(run())
+
+
+def test_sensor_generated_pattern_cannot_become_a_real_scene(monkeypatch):
+    board = SettingsBoard()
+    board.health["test_pattern"] = True
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        with pytest.raises(ProtocolError):
+            await bench.connect("192.168.4.1", 80)
+        assert bench.phase == "error" and bench.health is None
+
+    asyncio.run(run())
+    _, headers, data = jpeg_reply(**{"x-lf2s-test-pattern": "1"})
+    with pytest.raises(ProtocolError):
+        preview_data(headers, data, health()["camera_stream_id"], 1, modern_health(), (0, 0))
+
+
+@pytest.mark.parametrize("always_busy", [False, True])
+def test_busy_preview_has_one_bounded_read_retry_with_new_id(monkeypatch, always_busy):
+    board = Board()
+    attempts = []
+
+    def request(*args):
+        if args[3].startswith("/preview?"):
+            attempts.append(args[3])
+            if always_busy or len(attempts) == 1:
+                return 429, {"content-type": "application/json"}, b'{"error":"camera_busy"}'
+        return board.request(*args)
+
+    monkeypatch.setattr("service.esp32.http_request", request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        if always_busy:
+            with pytest.raises(ProtocolError, match="暂忙"):
+                await bench.preview()
+            assert bench.camera_busy_responses == 2
+        else:
+            data, headers = await bench.preview()
+            assert data.startswith(b"\xff\xd8") and headers["X-LF2S-Request-Id"] == "2"
+            assert bench.camera_busy_responses == 1
+        assert len(attempts) == 2 and "request_id=1&" in attempts[0] and "request_id=2&" in attempts[1]
+        assert bench.phase == "online"
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("fault", [None, "timeout", "disconnect"])
+def test_persistent_http_reuses_one_socket_and_discards_a_timed_out_read(fault):
+    stall_second = fault is not None
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    server.settimeout(3)
+    observed = []
+    second_entered = threading.Event()
+
+    def serve():
+        owned, _ = server.accept()
+        owned.settimeout(3)
+        with owned:
+            for index in range(2):
+                request = b""
+                while b"\r\n\r\n" not in request:
+                    part = owned.recv(4096)
+                    if not part:
+                        return
+                    request += part
+                observed.append(request)
+                if index == 1:
+                    second_entered.set()
+                head = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: application/json\r\n\r\n"
+                try:
+                    owned.sendall(head + (b"{" if index == 1 and stall_second else b"{}"))
+                except OSError:
+                    return
+                if index == 1 and stall_second:
+                    time.sleep(2.3)
+                    try:
+                        owned.sendall(b"}")
+                    except OSError:
+                        pass
+            # Successful requests keep the socket until the caller disconnects.
+            if not stall_second:
+                assert owned.recv(1) == b""
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    session = HttpSession()
+    try:
+        args = ("127.0.0.1", server.getsockname()[1], "GET", "/health", 8192, session)
+        assert http_request(*args)[2] == b"{}"
+        connection = session.connection
+        if fault == "disconnect":
+            def disconnect():
+                assert second_entered.wait(2)
+                session.close()
+            closer = threading.Thread(target=disconnect, daemon=True)
+            closer.start()
+        if stall_second:
+            with pytest.raises(TransportError) as failed:
+                http_request(*args)
+            assert failed.value.code == ("response_timeout" if fault == "timeout" else "connection_interrupted")
+            assert session.connection is None
+        else:
+            assert http_request(*args)[2] == b"{}" and session.connection is connection
+        assert len(observed) == 2
+        assert all(b"Connection: keep-alive\r\n" in request for request in observed)
+    finally:
+        session.close()
+        server.close()
+        thread.join(3)
+    assert not thread.is_alive()
+    if fault == "disconnect":
+        closer.join(1)
+        assert not closer.is_alive()
 
 
 @pytest.mark.parametrize("host,port", [("127.0.0.1", 80), ("0.0.0.0", 80),
@@ -319,8 +556,9 @@ def test_api_simulation_replay_and_real_board_isolation(tmp_path, monkeypatch):
         assert client.post(route + "bench/focus", json={}).json() == {"accepted": True, "focused": False}
         app.state.adapter.replaying = True
         count = len(board.calls)
-        for name in ("bench/connect", "bench/focus"):
-            assert client.post(route + name, json={}).status_code == 409
+        for name, body in (("bench/connect", {}), ("bench/focus", {}),
+                           ("bench/settings", {"size": "vga", "colour": "driver"})):
+            assert client.post(route + name, json=body).status_code == 409
         assert client.get(route + "bench/preview").status_code == 409
         assert len(board.calls) == count
         app.state.adapter.replaying = False

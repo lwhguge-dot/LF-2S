@@ -53,6 +53,12 @@ class BoardTarget(BaseModel):
     port: int = 80
 
 
+class BoardSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    size: Literal["qvga", "vga", "svga"]
+    colour: Literal["driver", "office"]
+
+
 def create_app(root, token, port, user_data):
     journal = Journal(user_data / "logs")
     recordings = Recordings(user_data / "recordings")
@@ -196,6 +202,12 @@ def create_app(root, token, port, user_data):
         if adapter.replaying:
             raise ProtocolError("回放禁止实物对焦")
         return await bench.focus()
+
+    @app.post("/api/v1/bench/settings")
+    async def bench_settings(body: BoardSettings):
+        if adapter.replaying:
+            raise ProtocolError("回放禁止调整实物预览")
+        return await bench.settings(body.size, body.colour)
 
     @app.post("/api/v1/connect")
     async def connect(body: EmptyBody | None = None):
