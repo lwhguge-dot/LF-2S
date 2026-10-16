@@ -3,7 +3,7 @@
 - 在 Windows 上始终使用 PowerShell 7（pwsh），不使用 powershell.exe。
 - 独立恢复、检查、打包入口为 `scripts/Station.ps1`；Python 使用本仓库 `.venv`。
 - 先阅读 README、docs/01_需求与状态契约.md 和 docs/03_验收与后续计划.md。
-- 当前 S2 版本仅本机合成任务与只读回放，没有真实设备出口；未知值使用 null，64 位协议编号用十进制字符串。
+- 当前 0.3.0 保留 S2 合成任务与只读回放，新增独立 ESP32 相机台架；没有真实飞行动作出口，STM32 待到货。未知值使用 null，64 位协议编号用十进制字符串。
 - 保留普通监控未签认配置和显式任务模拟器的隔离，模拟测试资格不能当生产签认。回放期间禁止连接、场景、任务、图像等实时入口。
 - `protocol/manifest.json` 记录受控协议原始字节哈希；不要手改生成协议。
 - 保留第三方许可；不要提交 node_modules、.venv、build、release、日志或凭据。

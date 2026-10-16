@@ -98,6 +98,9 @@ def main():
     ).strip():
         raise RuntimeError("Commit source and public evidence before publishing")
     notes = (ROOT / "docs/releases" / f"{tag}.md").read_text("utf-8")
+    title = notes.splitlines()[0].removeprefix("# ").strip()
+    if not title.startswith(tag + " · "):
+        raise ValueError("Release notes must start with the matching version and title")
     if args.check:
         print(
             json.dumps(
@@ -170,7 +173,7 @@ def main():
             {
                 "tag_name": tag,
                 "target_commitish": commit,
-                "name": f"{tag} · S2 模拟任务与只读回放",
+                "name": title,
                 "body": notes,
                 "draft": True,
                 "prerelease": True,
@@ -216,7 +219,7 @@ def main():
         f"{API}/releases/{release['id']}",
         "PATCH",
         {
-            "name": f"{tag} · S2 模拟任务与只读回放",
+            "name": title,
             "body": notes,
             "draft": False,
             "prerelease": True,

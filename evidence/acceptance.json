@@ -1,16 +1,16 @@
 {
-  "date": "2026-10-15T22:11:17.625126+08:00",
+  "date": "2026-10-16T20:59:28.381481+08:00",
   "platform": "Windows-11-10.0.26200-SP0",
-  "stage": "S0–S2",
-  "version": "0.2.0",
+  "stage": "S0–S2 + ESP32 display bench",
+  "version": "0.3.0",
   "backend": {
-    "tests": 26,
+    "tests": 60,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "development_desktop_checks": 34,
-  "packaged_desktop_checks": 34,
+  "development_desktop_checks": 37,
+  "packaged_desktop_checks": 37,
   "packaged_runtime": {
     "versions": {
       "node": "24.21.0",
@@ -49,11 +49,25 @@
     "arch": "x64"
   },
   "cleanup": {
-    "scope": "Only this application workspace; unrelated processes are not terminated",
-    "processes": [],
     "passed": true,
-    "checked_at": "2026-10-15T22:10:13.4056309+08:00"
+    "processes": [],
+    "checked_at": "2026-10-16T20:57:24.9637346+08:00",
+    "scope": "Only this application workspace; unrelated processes are not terminated"
   },
   "passed": true,
-  "scope": "synthetic loopback tasks and read-only replay; no hardware/flight acceptance"
+  "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
+  "esp32_display_bench": {
+    "dev": {
+      "passed": true,
+      "checks": 18,
+      "frames": 12,
+      "firmware": "0.1.4"
+    },
+    "package": {
+      "passed": true,
+      "checks": 18,
+      "frames": 12,
+      "firmware": "0.1.4"
+    }
+  }
 }

@@ -1,0 +1,392 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { bridge, type RealCapture, type State } from "./bridge";
+
+const props = defineProps<{ state: State; serviceReady: boolean }>();
+const emit = defineEmits<{ refresh: [state: State] }>();
+const host = ref("192.168.4.1");
+const port = ref(80);
+const busy = ref(false);
+const reading = ref(false);
+const auto = ref(true);
+const message = ref("");
+const imageURL = ref("");
+const imageMeta = ref<RealCapture | null>(null);
+const imageAt = ref(0);
+const now = ref(performance.now());
+let epoch = 0;
+let alive = true;
+let timer: ReturnType<typeof setInterval>;
+const bench = computed(() => props.state.bench);
+const health = computed(() => bench.value?.health);
+const online = computed(
+  () =>
+    props.serviceReady &&
+    !props.state.replay &&
+    bench.value?.phase === "online",
+);
+const fresh = computed(
+  () => online.value && !!imageURL.value && now.value - imageAt.value < 2000,
+);
+const focusText = computed(() =>
+  !health.value?.autofocus_initialized
+    ? "不可用"
+    : health.value.autofocus_focused
+      ? "传感器报告已对焦"
+      : health.value.autofocus_busy
+        ? "传感器报告搜索中"
+        : "尚未报告完成",
+);
+const status = computed(() =>
+  !props.serviceReady
+    ? "本地服务不可用"
+    : {
+        disconnected: "未连接实物",
+        connecting: "正在读取板卡",
+        online: "实物相机在线",
+        error: "连接已失效",
+      }[bench.value?.phase || "disconnected"],
+);
+
+function clearImage() {
+  epoch++;
+  if (imageURL.value) URL.revokeObjectURL(imageURL.value);
+  imageURL.value = "";
+  imageMeta.value = null;
+  imageAt.value = 0;
+}
+async function run(action: () => Promise<unknown>, success: string) {
+  if (busy.value) return;
+  busy.value = true;
+  message.value = "";
+  try {
+    await action();
+    if (!alive) return;
+    emit("refresh", await bridge.state());
+    message.value = success;
+  } catch (error) {
+    if (alive)
+      message.value = String(error).split("Error: ").at(-1) || "请求未完成";
+  } finally {
+    busy.value = false;
+  }
+}
+function connect() {
+  clearImage();
+  return run(
+    () => bridge.benchConnect(host.value.trim(), port.value),
+    "实物台架已连接，飞控数据仍为未知",
+  );
+}
+function disconnect() {
+  clearImage();
+  return run(bridge.benchDisconnect, "已断开实物；需手动选择后续连接");
+}
+async function preview() {
+  if (reading.value || busy.value || !online.value) return;
+  const requestEpoch = epoch;
+  const boardEpoch = bench.value?.epoch;
+  reading.value = true;
+  try {
+    const frame = await bridge.benchPreview();
+    if (
+      !alive ||
+      requestEpoch !== epoch ||
+      !online.value ||
+      frame.epoch !== boardEpoch ||
+      frame.stream_id !== health.value?.camera_stream_id
+    )
+      return;
+    const url = URL.createObjectURL(
+      new Blob([Uint8Array.from(frame.bytes).buffer], { type: "image/jpeg" }),
+    );
+    if (imageURL.value) URL.revokeObjectURL(imageURL.value);
+    imageURL.value = url;
+    imageMeta.value = frame;
+    imageAt.value = performance.now();
+  } catch (error) {
+    if (alive && requestEpoch === epoch) {
+      clearImage();
+      message.value = String(error).split("Error: ").at(-1) || "图像请求未完成";
+    }
+  } finally {
+    reading.value = false;
+  }
+}
+function focus() {
+  return run(bridge.benchFocus, "重新对焦请求已接受；请观察画面与传感器状态");
+}
+watch(
+  [online, () => bench.value?.epoch, () => health.value?.camera_stream_id],
+  () => {
+    clearImage();
+    if (online.value && auto.value) void preview();
+  },
+);
+onMounted(() => {
+  timer = setInterval(() => {
+    now.value = performance.now();
+    if (auto.value) void preview();
+  }, 750);
+});
+onUnmounted(() => {
+  alive = false;
+  clearInterval(timer);
+  clearImage();
+});
+</script>
+
+<template>
+  <section class="bench-layout" data-testid="real-bench">
+    <article class="panel bench-camera">
+      <div class="panel-heading">
+        <h2>OV5640 实物预览</h2>
+        <span class="chip teal">真实相机 · 仅显示</span>
+      </div>
+      <div class="bench-stage">
+        <img
+          v-if="fresh"
+          :src="imageURL"
+          alt="ESP32 OV5640 实际拍摄画面"
+          data-testid="real-image"
+          @error="clearImage"
+        />
+        <div v-else class="bench-placeholder" data-testid="real-image-empty">
+          <strong>{{ imageURL ? "图像已过期" : "等待实物图像" }}</strong>
+          <span>{{
+            bench?.reason || "先让电脑连接 ESP32 热点，再连接实物台架"
+          }}</span>
+        </div>
+        <span class="image-watermark">实拍 · 未标定 · 不用于飞行控制</span>
+      </div>
+      <div class="bench-frame" data-testid="real-frame">
+        <template v-if="imageMeta"
+          >{{ imageMeta.width }} × {{ imageMeta.height }} · 帧
+          {{ imageMeta.frame_id }} ·
+          {{ fresh ? "近期收到" : "显示过期" }}</template
+        >
+        <template v-else>尚无有效图像</template>
+      </div>
+      <div class="image-tools">
+        <label class="check"
+          ><input v-model="auto" type="checkbox" />连续预览</label
+        >
+        <button :disabled="!online || reading || busy" @click="preview">
+          读取实物图像
+        </button>
+        <button
+          :disabled="
+            !online || reading || busy || !health?.autofocus_initialized
+          "
+          @click="focus"
+        >
+          重新对焦
+        </button>
+      </div>
+      <p class="bench-note">
+        预览刷新速度与图像接收年龄用于显示；尚未完成曝光时序、相机标定与视觉控制验收。
+      </p>
+    </article>
+    <div class="bench-sidebar">
+      <article class="panel bench-connection">
+        <div class="panel-heading">
+          <h2>ESP32 单板连接</h2>
+          <span class="chip">Wi-Fi</span>
+        </div>
+        <p class="bench-status" data-testid="bench-status">{{ status }}</p>
+        <p>电脑连接热点 LF2S-S3-81E5。USB 继续供电；本页通过热点读取图像。</p>
+        <label
+          >板卡 IPv4 地址<input
+            v-model="host"
+            :disabled="busy || bench?.active"
+            maxlength="15"
+            aria-label="ESP32 IPv4 地址"
+        /></label>
+        <label
+          >HTTP 端口<input
+            v-model.number="port"
+            :disabled="busy || bench?.active"
+            type="number"
+            min="1"
+            max="65535"
+            aria-label="ESP32 HTTP 端口"
+        /></label>
+        <div class="connection-buttons">
+          <button
+            class="primary"
+            :disabled="
+              !serviceReady || busy || !!bench?.active || !!state.replay
+            "
+            @click="connect"
+          >
+            连接实物台架
+          </button>
+          <button
+            :disabled="!serviceReady || busy || !bench?.active"
+            @click="disconnect"
+          >
+            断开实物台架
+          </button>
+        </div>
+        <p v-if="bench?.reason" class="bench-error" role="alert">
+          {{ bench.reason }}
+        </p>
+        <p v-if="message" class="bench-note" role="status">{{ message }}</p>
+      </article>
+      <article class="panel bench-diagnostics">
+        <div class="panel-heading">
+          <h2>板卡诊断</h2>
+          <span class="chip">只读</span>
+        </div>
+        <dl>
+          <dt>固件</dt>
+          <dd>{{ health?.firmware || "未知" }}</dd>
+          <dt>协议</dt>
+          <dd>{{ health?.protocol || "未知" }}</dd>
+          <dt>自动对焦</dt>
+          <dd data-testid="focus-state">{{ focusText }}</dd>
+          <dt>AF 原始状态</dt>
+          <dd>
+            {{ health ? `0x${health.autofocus_status.toString(16)}` : "未知" }}
+          </dd>
+          <dt>图像尺寸</dt>
+          <dd>
+            {{
+              health
+                ? `${health.preview_width} × ${health.preview_height}`
+                : "未知"
+            }}
+          </dd>
+          <dt>PSRAM</dt>
+          <dd>{{ health ? `${health.psram_bytes / 1048576} MiB` : "未知" }}</dd>
+          <dt>UDP 校验 / 拒绝</dt>
+          <dd>
+            {{
+              health
+                ? `${health.udp_validated} / ${health.udp_rejected}`
+                : "未知"
+            }}
+          </dd>
+          <dt>流编号</dt>
+          <dd class="bench-id">{{ health?.camera_stream_id || "未知" }}</dd>
+        </dl>
+      </article>
+      <article class="panel bench-boundary">
+        <h2>飞控尚未接入</h2>
+        <p>
+          高度、姿态、位置、电压：未知。STM32
+          到货后再核对接线和联调。当前飞行动作入口关闭。
+        </p>
+      </article>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.bench-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 20px;
+}
+.bench-camera {
+  align-self: start;
+  overflow: hidden;
+}
+.bench-stage {
+  position: relative;
+  background: #060c11;
+  aspect-ratio: 4/3;
+  display: grid;
+  place-items: center;
+}
+.bench-stage img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  position: absolute;
+}
+.bench-placeholder {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+  gap: 12px;
+  padding: 30px;
+  color: #9aaebc;
+}
+.bench-placeholder strong {
+  font-size: 20px;
+  color: #dce8ee;
+}
+.bench-frame {
+  padding: 10px 18px;
+  border-top: 1px solid #23313d;
+  color: #9dbecc;
+}
+.bench-note {
+  padding: 12px 18px;
+  font-size: 12px;
+}
+.bench-sidebar {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+.bench-connection > p,
+.bench-boundary {
+  padding: 12px 18px;
+}
+.bench-status {
+  color: #9ae7d5;
+  font-size: 16px;
+}
+.bench-connection label {
+  padding: 6px 18px;
+  display: grid;
+  gap: 5px;
+  color: #a9bdc9;
+}
+.bench-connection input {
+  width: 100%;
+  background: #101c26;
+  border: 1px solid #31424d;
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: #dce8ee;
+}
+.connection-buttons {
+  padding: 12px 18px;
+}
+.bench-error {
+  color: #ffbba0;
+}
+dl {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  padding: 0 18px 18px;
+  gap: 10px;
+}
+dt {
+  color: #92a6b5;
+}
+dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.bench-id {
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+.bench-boundary h2 {
+  color: #ffc2a3;
+  margin-bottom: 8px;
+}
+@media (max-width: 1100px) {
+  .bench-layout {
+    grid-template-columns: 1fr;
+  }
+  .bench-sidebar {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+</style>

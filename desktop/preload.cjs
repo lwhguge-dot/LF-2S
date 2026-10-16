@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld(
     replayClose: () => ipcRenderer.invoke("station:replayClose"),
     scenario: (name) => ipcRenderer.invoke("station:scenario", name),
     image: () => ipcRenderer.invoke("station:image"),
+    benchConnect: (host, port) =>
+      ipcRenderer.invoke("station:benchConnect", host, port),
+    benchDisconnect: () => ipcRenderer.invoke("station:benchDisconnect"),
+    benchFocus: () => ipcRenderer.invoke("station:benchFocus"),
+    benchPreview: () => ipcRenderer.invoke("station:benchPreview"),
     restart: () => ipcRenderer.invoke("station:restart"),
     openLogs: () => ipcRenderer.invoke("station:open-logs"),
     onState: (callback) => {

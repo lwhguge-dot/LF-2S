@@ -21,6 +21,20 @@ def main():
     }
     dev = json.loads((evidence / "desktop-dev.json").read_text("utf-8"))
     packaged = json.loads((evidence / "desktop-package.json").read_text("utf-8"))
+    physical = {}
+    for mode in ("dev", "package"):
+        path = evidence / f"esp32-{mode}-live.json"
+        if path.exists():
+            saved = json.loads(path.read_text("utf-8"))
+            if saved.get("application_version") == VERSION and saved.get("passed"):
+                physical[mode] = {"passed": True, "checks": len(saved["checks"]),
+                                  "frames": len(saved.get("frames", [])),
+                                  "firmware": saved["health"]["firmware"]}
+    physical_note = (
+        f"开发版和目录包已连接实物 ESP32，固件 {physical['package']['firmware']}；"
+        "图像解码、对焦请求接受、飞控未知和断开失效检查通过。"
+        if len(physical) == 2 else "本机缺少完整实物双模式报告，ESP32 实测状态不能据此确认。"
+    )
     cleanup = json.loads((evidence / "cleanup.json").read_text("utf-8-sig"))
     assert (
         backend["failures"] == backend["errors"] == 0
@@ -44,7 +58,7 @@ def main():
     report = {
         "date": datetime.now().astimezone().isoformat(),
         "platform": platform.platform(),
-        "stage": "S0–S2",
+        "stage": "S0–S2 + ESP32 display bench",
         "version": VERSION,
         "backend": backend,
         "development_desktop_checks": len(dev["checks"]),
@@ -52,7 +66,8 @@ def main():
         "packaged_runtime": packaged["runtime"],
         "cleanup": cleanup,
         "passed": True,
-        "scope": "synthetic loopback tasks and read-only replay; no hardware/flight acceptance",
+        "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
+        "esp32_display_bench": physical,
     }
     (evidence / "acceptance.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), "utf-8"
@@ -69,6 +84,7 @@ def main():
             "runtime": packaged["runtime"],
         },
         "cleanup_passed": cleanup["passed"],
+        "esp32_display_bench": physical,
     }
     (evidence / "public-verification.json").write_text(
         json.dumps(public, ensure_ascii=False, indent=2) + "\n", "utf-8"
@@ -79,9 +95,9 @@ def main():
         if integrity["authority_checked"]
         else "独立仓库副本与清单哈希一致；本次未读取外部权威源"
     )
-    text = f"""# LF-2S 上位机 S0–S2 验收报告
+    text = f"""# LF-2S 上位机模拟回归与 ESP32 台架报告
 
-日期：{datetime.now().astimezone().date()}。版本：{VERSION}。结论：本机模拟监控、任务闭环与只读回放已实现并验证；S3–S5 尚未完成。所有测试是软件/本机网络证据，没有连接飞机。
+日期：{datetime.now().astimezone().date()}。版本：{VERSION}。本机模拟监控、任务闭环与只读回放已验证。{physical_note} STM32、真实动作与 S3 整体尚未完成。
 
 ## 可运行产物
 
@@ -93,7 +109,7 @@ def main():
 
 | 范围 | 结果 | 证据 |
 | --- | --- | --- |
-| 应用后台，真实 HTTP/UDP/子进程 | {backend["tests"]} 项通过，0 失败/错误 | backend-junit.xml；tests/test_backend.py |
+| 应用后台，HTTP/UDP/子进程与实物 provider 软件契约 | {backend["tests"]} 项通过，0 失败/错误 | backend-junit.xml；tests/test_backend.py、test_esp32.py |
 | 实际 Electron 开发窗口 | {len(dev["checks"])} 个检查点通过 | desktop-dev.json；dev-*.png |
 | 自带运行时的 Windows 目录包 | {len(packaged["checks"])} 个检查点通过 | desktop-package.json；package-*.png |
 | Python、Vue/TypeScript、Electron 语法、格式 | 通过 | .work/package.log；Station.ps1 check |
@@ -101,6 +117,12 @@ def main():
 | 最终后台/桌面进程清理 | 通过；无本工程匹配进程残留 | cleanup.json |
 
 开发窗口和目录包重复的是同一组功能验收，不把检查点相加解释为更多业务能力。
+
+## ESP32 实物显示
+
+{physical_note}
+
+真实板测试独立于软件/模拟回归，使用 `tests/esp32_live.cjs`。实物摘要：`{json.dumps(physical, ensure_ascii=False)}`。原始实物 JSON 与照片留在本机，不随公开文档携带。显示成功与 AF 命令接受不证明光学对焦、曝光新鲜度或标定合格。实物连接占用期间模拟操作拒绝；回放关闭实物通道；飞控测量保持未知。固件的 UART 与动作出口关闭。
 
 公开仓库只保留 public-verification.json、acceptance.json、本报告和截图；JUnit、完整运行报告与进程记录由复验生成，不把本机绝对路径和主机名带入公开发布。
 
@@ -132,7 +154,7 @@ def main():
 
 ## 明确未验收事项
 
-尚未交付 NSIS 安装/升级/卸载、数字签名、另一台干净 Windows 主机、真实 ESP32/STM32/UART/NRF、真实图像/采样新鲜度、语音/视觉模型、机载故障处置或飞行验收。System32 PATH 和页面 offline 检查不能代替这些项目。没有修改商家原件、现有协议权威源或 ESP-IDF hello_world。
+尚未交付 NSIS 安装/升级/卸载、数字签名、另一台干净 Windows 主机、STM32/UART/NRF、相机清晰度/采样新鲜度/标定、语音/视觉模型、机载故障处置或飞行验收。System32 PATH 和页面 offline 检查不能代替这些项目。没有修改商家原件、现有协议权威源或 ESP-IDF hello_world。
 
 下一阶段为 S3 真实主线；S4 独立图像、中文语音、视觉；S5 Mind+ 经有线手柄/NRF。详细入口在 `docs/03_验收与后续计划.md`。定位/高度失效时不能从本机状态提示推导“真实飞机一定悬停”。
 """

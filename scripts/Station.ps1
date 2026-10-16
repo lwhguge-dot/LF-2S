@@ -49,7 +49,7 @@ try {
     if ($Task -eq 'check') {
         Invoke-Checked $appPython @('-m','ruff','check','service','simulation','scripts','tests')
         Invoke-Checked $appPython @('-B','scripts\sync_protocol.py','--check')
-        Invoke-Checked $appPython @('-m','pytest','tests\test_backend.py','-q','--junitxml=evidence\backend-junit.xml')
+        Invoke-Checked $appPython @('-m','pytest','tests\test_backend.py','tests\test_esp32.py','-q','--junitxml=evidence\backend-junit.xml')
         Invoke-Checked 'npm.cmd' @('run','check:desktop')
         Invoke-Checked 'npm.cmd' @('run','build')
         Invoke-Checked 'npm.cmd' @('run','verify:desktop')

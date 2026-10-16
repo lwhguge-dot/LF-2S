@@ -23,6 +23,7 @@ PUBLIC_EVIDENCE = (
     "package-task-active.png",
     "package-task-completed.png",
     "package-replay.png",
+    "package-bench-disconnected.png",
 )
 
 
@@ -80,7 +81,7 @@ def manifest(destination):
     manifest = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "version": VERSION,
-        "scope": "S0–S2 synthetic task closure and read-only replay; not hardware/flight acceptance",
+        "scope": "ESP32 display-only camera bench and S0–S2 simulation/replay; not FC, optical timing or flight acceptance",
         "directory": destination.name,
         "source_sha256_lf": source_inputs(),
         "files": [],

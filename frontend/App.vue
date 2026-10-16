@@ -4,6 +4,7 @@ import { bridge, type Capture, type Sensor, type State } from "./bridge";
 import metadata from "../package.json";
 import TaskPanel from "./TaskPanel.vue";
 import ReplayPanel from "./ReplayPanel.vue";
+import BenchPanel from "./BenchPanel.vue";
 
 const state = ref<State>({
   simulation: true,
@@ -36,7 +37,15 @@ const phase = computed(() =>
     ? "service_error"
     : state.value.link?.phase || "disconnected",
 );
-const online = computed(() => phase.value === "online" && !state.value.replay);
+const online = computed(
+  () =>
+    phase.value === "online" &&
+    !state.value.replay &&
+    !state.value.bench?.active,
+);
+const benchPage = computed(
+  () => page.value === "bench" || !!state.value.bench?.active,
+);
 const phaseNames: Record<string, string> = {
   online: "模拟链路在线",
   disconnected: "尚未连接",
@@ -188,6 +197,17 @@ watch(online, (value) => {
     imageAt.value = 0;
   } else if (autoImage.value) void capture();
 });
+watch(
+  () => state.value.bench?.active,
+  (active) => {
+    if (!active) return;
+    imageEpoch++;
+    if (imageURL.value) URL.revokeObjectURL(imageURL.value);
+    imageURL.value = "";
+    imageMeta.value = null;
+    imageAt.value = 0;
+  },
+);
 function timeText(value: string) {
   return new Date(value).toLocaleTimeString("zh-CN", { hour12: false });
 }
@@ -225,6 +245,7 @@ onUnmounted(() => {
         <button
           v-for="item in [
             ['overview', '◫', '监控总览'],
+            ['bench', '▣', 'ESP32 实物台架'],
             ['protocol', '⌘', '协议详情'],
             ['logs', '≡', '事件日志'],
             ['tasks', '▷', '模拟任务'],
@@ -241,9 +262,11 @@ onUnmounted(() => {
         </button>
       </nav>
       <div class="rail-bottom">
-        <span class="edition">S2 · v{{ metadata.version }}</span>
+        <span class="edition">v{{ metadata.version }}</span>
         <p>自用与教学<br />Windows 桌面版</p>
-        <div class="readonly-dot">仅本机模拟</div>
+        <div class="readonly-dot">
+          {{ benchPage ? "实物相机台架" : "本机模拟" }}
+        </div>
       </div>
     </aside>
     <main>
@@ -254,6 +277,7 @@ onUnmounted(() => {
             {{
               {
                 overview: "监控总览",
+                bench: "ESP32 实物台架",
                 protocol: "协议详情",
                 logs: "事件日志",
                 tasks: "模拟任务",
@@ -264,11 +288,32 @@ onUnmounted(() => {
           </h1>
         </div>
         <div class="top-status">
-          <span :class="['status-dot', { good: online }]" />{{ phaseName
+          <span
+            :class="[
+              'status-dot',
+              {
+                good:
+                  online || (serviceReady && state.bench?.phase === 'online'),
+              },
+            ]"
+          />{{
+            state.bench?.active
+              ? state.bench.phase === "online" && serviceReady
+                ? "实物相机在线 · 飞控未接入"
+                : "实物连接未就绪"
+              : phaseName
           }}<span class="version">MAVLink 2</span>
         </div>
       </header>
-      <div class="simulation-banner" data-testid="simulation-banner">
+      <div
+        v-if="benchPage"
+        class="simulation-banner"
+        data-testid="bench-banner"
+      >
+        <span class="tag">实物台架</span><strong>ESP32 相机与板卡诊断</strong
+        ><span>真实图像仅供显示 · STM32 未接入 · 飞行动作关闭</span>
+      </div>
+      <div v-else class="simulation-banner" data-testid="simulation-banner">
         <span class="tag">模拟模式</span
         ><strong>{{ state.replay ? "只读历史回放" : "模拟任务预览版" }}</strong
         ><span>设备、动作与图像均由本机模型生成 · 未连接真实飞机</span>
@@ -286,6 +331,13 @@ onUnmounted(() => {
         {{ linkReason }}
         <button :disabled="busy" @click="restartService">重启本地服务</button>
       </div>
+
+      <BenchPanel
+        v-if="page === 'bench'"
+        :state="state"
+        :service-ready="serviceReady"
+        @refresh="receive"
+      />
 
       <div v-show="page === 'overview'" class="overview-grid">
         <section class="visual-area">
@@ -407,6 +459,7 @@ onUnmounted(() => {
                 :disabled="
                   busy ||
                   !serviceReady ||
+                  !!state.bench?.active ||
                   !!state.replay ||
                   phase !== 'disconnected'
                 "
@@ -425,7 +478,9 @@ onUnmounted(() => {
             ><select
               id="scenario"
               v-model="scenario"
-              :disabled="busy || !serviceReady || !!state.replay"
+              :disabled="
+                busy || !serviceReady || !!state.replay || !!state.bench?.active
+              "
               @change="changeScenario"
             >
               <option
@@ -599,7 +654,11 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <TaskPanel v-if="page === 'tasks'" :state="state" :ready="serviceReady" />
+      <TaskPanel
+        v-if="page === 'tasks'"
+        :state="state"
+        :ready="serviceReady && !state.bench?.active"
+      />
       <ReplayPanel
         v-if="page === 'replay'"
         :state="state"
@@ -649,8 +708,8 @@ onUnmounted(() => {
         </article>
       </section>
       <footer>
-        <span>模拟任务 / 只读回放 · 离线本机运行</span
-        ><span>软件验证不代表真实 UART、相机、语音或飞行验收</span>
+        <span>ESP32 台架 / 模拟任务 / 只读回放</span
+        ><span>飞控、视觉控制与飞行验收待后续联调</span>
       </footer>
     </main>
   </div>

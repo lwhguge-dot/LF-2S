@@ -110,7 +110,10 @@ async function request(route, method = "GET", body, binary = false) {
         );
       },
     );
-    req.setTimeout(4000, () => req.destroy(new Error("本地服务请求超时")));
+    req.setTimeout(
+      binary === "real" || route.startsWith("bench/") ? 7000 : 4000,
+      () => req.destroy(new Error("本地服务请求超时")),
+    );
     req.on("error", reject);
     req.end(payload);
   });
@@ -122,6 +125,51 @@ async function request(route, method = "GET", body, binary = false) {
     throw new Error(data.error || `本地服务返回 ${response.status}`);
   }
   if (!binary) return JSON.parse(response.body.toString("utf8"));
+  if (binary === "real") {
+    const h = response.headers;
+    const length = Number(h["content-length"]);
+    const width = Number(h["x-lf2s-width"]);
+    const height = Number(h["x-lf2s-height"]);
+    const frame = Number(h["x-lf2s-frame-id"]);
+    const epoch = Number(h["x-lf2s-epoch"]);
+    const validU64 = (s) =>
+      typeof s === "string" &&
+      /^[1-9][0-9]{0,19}$/.test(s) &&
+      BigInt(s) < 1n << 64n;
+    if (
+      !Number.isInteger(length) ||
+      length < 4 ||
+      length > 262144 ||
+      response.body.length !== length ||
+      h["content-type"] !== "image/jpeg" ||
+      h["x-lf2s-synthetic"] !== "0" ||
+      h["x-lf2s-display-only"] !== "1" ||
+      h["x-lf2s-hardware-qualified"] !== "0" ||
+      h["x-lf2s-capture-after-request"] !== "0" ||
+      !validU64(h["x-lf2s-stream-id"]) ||
+      !validU64(h["x-lf2s-capture-us"]) ||
+      !Number.isInteger(frame) ||
+      frame < 1 ||
+      frame > 0xffffffff ||
+      !Number.isSafeInteger(epoch) ||
+      epoch < 1 ||
+      ![width, height].every((v) => Number.isInteger(v) && v >= 1 && v <= 1600)
+    )
+      throw new Error("实物图像响应无效");
+    return {
+      bytes: new Uint8Array(response.body),
+      frame_id: frame,
+      epoch,
+      width,
+      height,
+      stream_id: h["x-lf2s-stream-id"],
+      capture_us: h["x-lf2s-capture-us"],
+      synthetic: false,
+      display_only: true,
+      hardware_freshness_qualified: false,
+      received_at: Date.now(),
+    };
+  }
   const length = Number(response.headers["content-length"]);
   if (
     !Number.isInteger(length) ||
@@ -279,7 +327,7 @@ async function boot() {
     height: 980,
     minWidth: 700,
     minHeight: 650,
-    title: "LF-2S 上位机 · 只读模拟版",
+    title: "LF-2S 上位机 · ESP32 台架与模拟",
     backgroundColor: "#0b141c",
     show: false,
     autoHideMenuBar: true,
@@ -363,6 +411,32 @@ async function boot() {
   ipcMain.handle("station:image", (event) => {
     validate(event);
     return request("image", "GET", undefined, true);
+  });
+  ipcMain.handle("station:benchConnect", (event, host, port) => {
+    validate(event);
+    if (
+      typeof host !== "string" ||
+      host.length > 15 ||
+      !/^\d{1,3}(\.\d{1,3}){3}$/.test(host) ||
+      !Number.isInteger(port) ||
+      port < 1 ||
+      port > 65535
+    )
+      throw new Error("ESP32 地址或端口无效");
+    return request("bench/connect", "POST", { host, port });
+  });
+  for (const [name, route] of [
+    ["benchDisconnect", "bench/disconnect"],
+    ["benchFocus", "bench/focus"],
+  ]) {
+    ipcMain.handle(`station:${name}`, (event) => {
+      validate(event);
+      return request(route, "POST");
+    });
+  }
+  ipcMain.handle("station:benchPreview", (event) => {
+    validate(event);
+    return request("bench/preview", "GET", undefined, "real");
   });
   ipcMain.handle("station:open-logs", (event) => {
     validate(event);

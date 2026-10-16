@@ -3,7 +3,7 @@ export interface Sensor {
   value: number | number[] | null;
   age_ms: number | null;
   reason: string | null;
-  source: "synthetic";
+  source: "synthetic" | "unavailable";
   unit: string;
 }
 export interface WireMessage {
@@ -30,7 +30,9 @@ export interface Operation {
   protocol_phase?: string;
 }
 export interface State {
-  simulation: true;
+  simulation: boolean;
+  mode?: "simulation" | "esp32_bench" | "replay";
+  bench?: Bench;
   read_only: boolean;
   hardware_control_allowed?: false;
   task_fixture?: boolean;
@@ -102,6 +104,49 @@ export interface TaskRun {
   steps: string[];
   queried_result?: { request_id: number; phase: string; reason: string };
 }
+export interface Bench {
+  active: boolean;
+  phase: "disconnected" | "connecting" | "online" | "error";
+  reason: string | null;
+  host: string;
+  port: number;
+  epoch: number;
+  health_age_ms: number | null;
+  health: {
+    firmware: string;
+    protocol: string;
+    dialect_hash: string;
+    camera_stream_id: string;
+    preview_width: number;
+    preview_height: number;
+    jpeg_quality: number;
+    autofocus_initialized: boolean;
+    autofocus_focused: boolean;
+    autofocus_busy: boolean;
+    autofocus_status: number;
+    autofocus_error: number;
+    uptime_ms: number;
+    psram_bytes: number;
+    heap_free_bytes: number;
+    camera_failures: number;
+    udp_received: number;
+    udp_validated: number;
+    udp_rejected: number;
+  } | null;
+}
+export interface RealCapture {
+  bytes: Uint8Array;
+  frame_id: number;
+  stream_id: string;
+  capture_us: string;
+  epoch: number;
+  width: number;
+  height: number;
+  synthetic: false;
+  display_only: true;
+  hardware_freshness_qualified: false;
+  received_at: number;
+}
 export interface Recording {
   id: string;
   started?: string;
@@ -136,6 +181,10 @@ export interface DesktopBridge {
   replayClose(): Promise<unknown>;
   scenario(name: string): Promise<unknown>;
   image(): Promise<Capture>;
+  benchConnect(host: string, port: number): Promise<Bench>;
+  benchDisconnect(): Promise<Bench>;
+  benchFocus(): Promise<{ accepted: boolean; focused: false }>;
+  benchPreview(): Promise<RealCapture>;
   restart(): Promise<unknown>;
   openLogs(): Promise<string>;
   onState(callback: (state: State) => void): () => void;

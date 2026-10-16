@@ -136,6 +136,45 @@ async function main() {
       "startup_does_not_automatically_connect_or_replay",
       startup.link.phase === "disconnected",
     );
+    await page
+      .getByRole("button", { name: "ESP32 实物台架", exact: false })
+      .click();
+    await page.getByTestId("real-bench").waitFor();
+    check(
+      "bench_disconnected_has_no_live_or_synthetic_picture",
+      (await page.getByTestId("real-image").count()) === 0 &&
+        (await page.getByTestId("real-image-empty").innerText()).includes(
+          "等待实物图像",
+        ),
+    );
+    check(
+      "bench_focus_disabled_without_real_connection",
+      await page
+        .getByRole("button", { name: "重新对焦", exact: true })
+        .isDisabled(),
+    );
+    await page.getByLabel("ESP32 IPv4 地址", { exact: true }).fill("127.0.0.1");
+    await page
+      .getByRole("button", { name: "连接实物台架", exact: true })
+      .click();
+    await page.getByText("仅允许局域网 IPv4 地址", { exact: true }).waitFor();
+    check(
+      "bench_rejects_loopback_and_leaves_simulation_disconnected",
+      !(await state(page)).bench.active &&
+        (await state(page)).link.phase === "disconnected",
+    );
+    await page
+      .getByLabel("ESP32 IPv4 地址", { exact: true })
+      .fill("192.168.4.1");
+    await page.screenshot({
+      path: path.join(
+        output,
+        packaged
+          ? "package-bench-disconnected.png"
+          : "dev-bench-disconnected.png",
+      ),
+    });
+    await page.getByRole("button", { name: "监控总览", exact: false }).click();
     await connect(page);
     await page
       .getByRole("button", { name: "读取协议配置", exact: true })
@@ -183,7 +222,7 @@ async function main() {
       isolation.node === "undefined" &&
         isolation.process === "undefined" &&
         isolation.keys.join(",") ===
-          "connect,disconnect,image,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart" &&
+          "benchConnect,benchDisconnect,benchFocus,benchPreview,connect,disconnect,image,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart" &&
         prefs.contextIsolation &&
         prefs.sandbox &&
         !prefs.nodeIntegration &&

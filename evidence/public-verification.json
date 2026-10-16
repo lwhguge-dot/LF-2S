@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
-  "scope": "synthetic loopback tasks and read-only replay; no hardware/flight acceptance",
+  "version": "0.3.0",
+  "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
   "backend": {
-    "tests": 26,
+    "tests": 60,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -22,6 +22,18 @@
         "passed": true
       },
       {
+        "name": "bench_disconnected_has_no_live_or_synthetic_picture",
+        "passed": true
+      },
+      {
+        "name": "bench_focus_disabled_without_real_connection",
+        "passed": true
+      },
+      {
+        "name": "bench_rejects_loopback_and_leaves_simulation_disconnected",
+        "passed": true
+      },
+      {
         "name": "actual_click_hello_profile_and_native_udp",
         "passed": true
       },
@@ -29,7 +41,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "9756596806637486901"
+        "client_nonce": "17578462965378322695"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -167,6 +179,18 @@
         "passed": true
       },
       {
+        "name": "bench_disconnected_has_no_live_or_synthetic_picture",
+        "passed": true
+      },
+      {
+        "name": "bench_focus_disabled_without_real_connection",
+        "passed": true
+      },
+      {
+        "name": "bench_rejects_loopback_and_leaves_simulation_disconnected",
+        "passed": true
+      },
+      {
         "name": "actual_click_hello_profile_and_native_udp",
         "passed": true
       },
@@ -174,7 +198,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "10586349942231565898"
+        "client_nonce": "14402061689860150499"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -341,5 +365,19 @@
       "arch": "x64"
     }
   },
-  "cleanup_passed": true
+  "cleanup_passed": true,
+  "esp32_display_bench": {
+    "dev": {
+      "passed": true,
+      "checks": 18,
+      "frames": 12,
+      "firmware": "0.1.4"
+    },
+    "package": {
+      "passed": true,
+      "checks": 18,
+      "frames": 12,
+      "firmware": "0.1.4"
+    }
+  }
 }

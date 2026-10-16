@@ -9,6 +9,7 @@ from lf2s_protocol.wire import ProtocolError
 from pydantic import BaseModel, ConfigDict
 
 from service.adapter import Adapter
+from service.esp32 import Esp32Bench, target
 from service.images import SyntheticImages
 from service.journal import Journal
 from service.recordings import Recordings
@@ -46,11 +47,19 @@ class ReplayPosition(BaseModel):
     index: int = 0
 
 
+class BoardTarget(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    host: str = "192.168.4.1"
+    port: int = 80
+
+
 def create_app(root, token, port, user_data):
     journal = Journal(user_data / "logs")
     recordings = Recordings(user_data / "recordings")
     journal.recorder = recordings
     adapter = Adapter(root, journal)
+    bench = Esp32Bench(journal)
+    mode_lock = asyncio.Lock()
     replay_frame = None
     replay_lock = asyncio.Lock()
     image_provider = SyntheticImages()
@@ -59,18 +68,37 @@ def create_app(root, token, port, user_data):
     image_log_at = -1000
     stream_id = str(secrets.randbits(64) | (1 << 63))
 
+    def simulation_only():
+        if bench.active:
+            raise ProtocolError("实物台架占用中；请先断开 ESP32，再使用模拟功能")
+
+    async def poll_board():
+        while True:
+            await asyncio.sleep(1)
+            try:
+                await bench.refresh()
+            except ProtocolError:
+                pass  # Invalidated until an explicit new connection.
+
     @asynccontextmanager
     async def lifespan(app):
+        board_poller = None
         try:
             await adapter.start()
+            board_poller = asyncio.create_task(poll_board())
             yield
         finally:
+            bench.disconnect()
+            if board_poller:
+                board_poller.cancel()
+                await asyncio.gather(board_poller, return_exceptions=True)
             await adapter.close()
             journal.close()
             await asyncio.to_thread(recordings.close)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.adapter = adapter
+    app.state.bench = bench
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -118,38 +146,91 @@ def create_app(root, token, port, user_data):
 
     @app.get("/api/v1/state")
     async def state():
-        return {
+        snapshot = {
             **adapter.snapshot(),
             "replay": replay_frame,
             "recording": recordings.stats(),
+            "mode": "replay" if adapter.replaying else "simulation",
+            "bench": bench.snapshot(),
         }
+        if bench.active:
+            snapshot.update(simulation=False, read_only=True, task_fixture=False, mode="esp32_bench")
+            snapshot["link"] = {"phase": "disconnected", "reason": "STM32 尚未接入；飞控数据未知",
+                                "state_age_ms": None, "transport": "飞控未接入", "ports": []}
+            snapshot["sensors"] = {
+                name: {**sensor, "valid": False, "value": None, "age_ms": None,
+                       "reason": "STM32 尚未接入", "source": "unavailable"}
+                for name, sensor in snapshot["sensors"].items()
+            }
+            snapshot["qualification"].update(
+                configuration_reason="STM32 尚未接入；未读取生产配置",
+                control_reason="ESP32 台架只提供图像显示与诊断；飞行动作关闭",
+            )
+        return snapshot
+
+    @app.post("/api/v1/bench/connect")
+    async def bench_connect(body: BoardTarget):
+        target(body.host, body.port)
+        async with mode_lock:
+            if adapter.replaying:
+                raise ProtocolError("请先退出只读回放")
+            if bench.active or bench.lock.locked():
+                raise ProtocolError("请先断开 ESP32 实物台架")
+            adapter.disconnect()
+            return await bench.connect(body.host, body.port)
+
+    @app.post("/api/v1/bench/disconnect")
+    async def bench_disconnect(body: EmptyBody | None = None):
+        async with mode_lock:
+            return bench.disconnect()
+
+    @app.get("/api/v1/bench/preview")
+    async def bench_preview():
+        if adapter.replaying:
+            raise ProtocolError("回放不读取实物图像")
+        jpeg, headers = await bench.preview()
+        return Response(jpeg, media_type="image/jpeg", headers=headers)
+
+    @app.post("/api/v1/bench/focus")
+    async def bench_focus(body: EmptyBody | None = None):
+        if adapter.replaying:
+            raise ProtocolError("回放禁止实物对焦")
+        return await bench.focus()
 
     @app.post("/api/v1/connect")
     async def connect(body: EmptyBody | None = None):
-        return await adapter.connect()
+        async with mode_lock:
+            simulation_only()
+            return await adapter.connect()
 
     @app.post("/api/v1/disconnect")
     async def disconnect(body: EmptyBody | None = None):
-        return adapter.disconnect()
+        async with mode_lock:
+            simulation_only()
+            return adapter.disconnect()
 
     @app.post("/api/v1/profile")
     async def profile(body: EmptyBody | None = None):
+        simulation_only()
         if adapter.replaying or adapter.tasks.running:
             raise ProtocolError("请先退出回放或结束任务，再查询配置")
         return await adapter.query_profile()
 
     @app.post("/api/v1/tasks/start")
     async def task_start(body: Confirmation):
+        simulation_only()
         return adapter.tasks.start(body.confirmed)
 
     @app.post("/api/v1/tasks/cancel")
     async def task_cancel(body: EmptyBody | None = None):
+        simulation_only()
         if adapter.replaying:
             raise ProtocolError("回放通道只读")
         return await adapter.tasks.cancel()
 
     @app.post("/api/v1/tasks/query")
     async def task_query(body: EmptyBody | None = None):
+        simulation_only()
         if adapter.replaying:
             raise ProtocolError("回放通道只读")
         return await adapter.tasks.query()
@@ -161,10 +242,11 @@ def create_app(root, token, port, user_data):
     @app.post("/api/v1/replay/open")
     async def replay_open(body: ReplayPosition):
         nonlocal replay_frame
-        async with replay_lock:
+        async with mode_lock, replay_lock:
             loaded = await asyncio.to_thread(
                 recordings.frame, body.recording_id, body.index
             )
+            bench.disconnect()
             adapter.disconnect()
             adapter.replaying = True
             replay_frame = loaded
@@ -197,6 +279,7 @@ def create_app(root, token, port, user_data):
 
     @app.post("/api/v1/simulation/scenario")
     async def scenario(body: Scenario):
+        simulation_only()
         return adapter.set_scenario(body.name)
 
     @app.get("/api/v1/events")
@@ -211,6 +294,7 @@ def create_app(root, token, port, user_data):
     @app.get("/api/v1/image")
     async def image():
         nonlocal image_frame, image_log_at
+        simulation_only()
         if adapter.replaying:
             raise ProtocolError("回放不读取实时合成图像")
         if adapter.snapshot()["link"]["phase"] != "online":
