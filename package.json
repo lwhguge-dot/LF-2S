@@ -1,14 +1,14 @@
 {
   "name": "lf2s-station",
   "productName": "LF-2S 上位机",
-  "version": "0.4.0",
+  "version": "0.8.0",
   "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/lwhguge-dot/LF-2S.git"
   },
-  "description": "LF-2S ESP32 camera bench, synthetic tasks and read-only replay desktop station",
+  "description": "LF-2S vendor FC USB and ESP32 camera benches, synthetic tasks and read-only replay desktop station",
   "main": "desktop/main.cjs",
   "engines": {
     "node": "26.8.2",

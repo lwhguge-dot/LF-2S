@@ -6,13 +6,17 @@ from typing import Literal
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 from lf2s_protocol.wire import ProtocolError
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from service.adapter import Adapter
+from service.controller import controller_snapshot
 from service.esp32 import Esp32Bench, target
+from service.fc_usb import FcUsbBench
 from service.images import SyntheticImages
 from service.journal import Journal
 from service.recordings import Recordings
+from service.text_tasks import TextTasks
+from service.voice import MAX_AUDIO_BYTES, Voice
 
 
 class Scenario(BaseModel):
@@ -59,12 +63,20 @@ class BoardSettings(BaseModel):
     colour: Literal["driver", "office"]
 
 
+class TextInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    text: str = Field(min_length=1, max_length=512)
+
+
 def create_app(root, token, port, user_data):
     journal = Journal(user_data / "logs")
     recordings = Recordings(user_data / "recordings")
     journal.recorder = recordings
     adapter = Adapter(root, journal)
     bench = Esp32Bench(journal)
+    usb_fc = FcUsbBench(journal, user_data / "logs")
+    text_tasks = TextTasks(journal)
+    voice = Voice(journal)
     mode_lock = asyncio.Lock()
     replay_frame = None
     replay_lock = asyncio.Lock()
@@ -75,8 +87,10 @@ def create_app(root, token, port, user_data):
     stream_id = str(secrets.randbits(64) | (1 << 63))
 
     def simulation_only():
-        if bench.active:
-            raise ProtocolError("实物台架占用中；请先断开 ESP32，再使用模拟功能")
+        if bench.active or usb_fc.active:
+            raise ProtocolError(
+                "实物台架占用中；请先断开相机和飞控 USB，再使用模拟功能"
+            )
 
     async def poll_board():
         while True:
@@ -94,17 +108,25 @@ def create_app(root, token, port, user_data):
             board_poller = asyncio.create_task(poll_board())
             yield
         finally:
-            bench.disconnect()
-            if board_poller:
-                board_poller.cancel()
-                await asyncio.gather(board_poller, return_exceptions=True)
-            await adapter.close()
-            journal.close()
-            await asyncio.to_thread(recordings.close)
+            try:
+                await voice.close()
+                await text_tasks.close()
+                await usb_fc.disconnect()
+            finally:
+                bench.disconnect()
+                if board_poller:
+                    board_poller.cancel()
+                    await asyncio.gather(board_poller, return_exceptions=True)
+                await adapter.close()
+                journal.close()
+                await asyncio.to_thread(recordings.close)
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.adapter = adapter
     app.state.bench = bench
+    app.state.usb_fc = usb_fc
+    app.state.text_tasks = text_tasks
+    app.state.voice = voice
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -120,7 +142,12 @@ def create_app(root, token, port, user_data):
             return JSONResponse({"error": "本地会话凭据无效"}, status_code=401)
         if request.method == "POST":
             try:
-                if int(request.headers.get("content-length", "0")) > 4096:
+                limit = (
+                    MAX_AUDIO_BYTES
+                    if request.url.path == "/api/v1/voice/transcribe"
+                    else 4096
+                )
+                if int(request.headers.get("content-length", "0")) > limit:
                     return JSONResponse({"error": "请求过大"}, status_code=413)
             except ValueError:
                 return JSONResponse({"error": "请求长度无效"}, status_code=400)
@@ -143,8 +170,8 @@ def create_app(root, token, port, user_data):
         return {
             "api_version": "1",
             "ready": True,
-            "simulation": True,
-            "read_only": False,
+            "simulation": not (bench.active or usb_fc.active),
+            "read_only": bench.active or usb_fc.active,
             "hardware_control_allowed": False,
             "pid": os.getpid(),
             "frozen": bool(getattr(sys, "frozen", False)),
@@ -158,21 +185,111 @@ def create_app(root, token, port, user_data):
             "recording": recordings.stats(),
             "mode": "replay" if adapter.replaying else "simulation",
             "bench": bench.snapshot(),
+            "usb_fc": usb_fc.snapshot(),
+            "text_tasks": text_tasks.snapshot(),
+            "voice": voice.snapshot(),
         }
-        if bench.active:
-            snapshot.update(simulation=False, read_only=True, task_fixture=False, mode="esp32_bench")
-            snapshot["link"] = {"phase": "disconnected", "reason": "STM32 尚未接入；飞控数据未知",
-                                "state_age_ms": None, "transport": "飞控未接入", "ports": []}
+        if bench.active or usb_fc.active:
+            snapshot.update(
+                simulation=False,
+                read_only=True,
+                task_fixture=False,
+                mode="hardware_bench" if usb_fc.active else "esp32_bench",
+            )
+            snapshot["link"] = {
+                "phase": "disconnected",
+                "reason": "未建立真实飞控 MAVLink 会话；USB 厂商数据独立显示",
+                "state_age_ms": None,
+                "transport": "MAVLink 未接入",
+                "ports": [],
+            }
             snapshot["sensors"] = {
-                name: {**sensor, "valid": False, "value": None, "age_ms": None,
-                       "reason": "STM32 尚未接入", "source": "unavailable"}
+                name: {
+                    **sensor,
+                    "valid": False,
+                    "value": None,
+                    "age_ms": None,
+                    "reason": "缺少已核实坐标与采样有效性的 MAVLink 测量",
+                    "source": "unavailable",
+                }
                 for name, sensor in snapshot["sensors"].items()
             }
             snapshot["qualification"].update(
-                configuration_reason="STM32 尚未接入；未读取生产配置",
-                control_reason="ESP32 台架只提供图像显示与诊断；飞行动作关闭",
+                configuration="unknown",
+                configuration_reason="未读取或签认生产配置",
+                control_reason="独立硬件台架仅供显示与诊断；飞行动作关闭",
+                manual_latched=None,
+                lease_id=None,
+                task_id=None,
             )
+            snapshot["identity"].update(
+                boot_id=None,
+                session_id=None,
+                client_nonce=None,
+                observed_dialect_hash=None,
+                sample_id=None,
+            )
+            snapshot["controller"] = controller_snapshot(reason="未建立真实飞控 MAVLink 会话")
+            snapshot["profile"] = None
+            snapshot["operations"] = []
+            snapshot["task"] = {
+                "running": False,
+                "unknown_request_id": None,
+                "current": None,
+                "target_height_mm": 500,
+            }
+            snapshot["counters"].update(sent=0, received=0, rejected=0)
         return snapshot
+
+    @app.post("/api/v1/voice/transcribe")
+    async def voice_transcribe(request: Request):
+        if request.headers.get("content-type", "").split(";")[0] != "audio/wav":
+            return JSONResponse({"error": "请提交 PCM WAV 音频"}, status_code=415)
+        raw = bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for block in request.stream():
+                    if len(raw) + len(block) > MAX_AUDIO_BYTES:
+                        return JSONResponse(
+                            {"error": "音频超过大小上限"}, status_code=413
+                        )
+                    raw.extend(block)
+        except TimeoutError:
+            return JSONResponse({"error": "音频提交超时"}, status_code=408)
+        async with mode_lock:
+            if adapter.replaying:
+                raise ProtocolError("回放期间不识别实时语音")
+            return voice.start(bytes(raw))
+
+    @app.post("/api/v1/voice/clear")
+    async def voice_clear(body: EmptyBody | None = None):
+        async with mode_lock:
+            return await voice.clear()
+
+    @app.post("/api/v1/text-tasks/parse")
+    async def text_parse(body: TextInput):
+        async with mode_lock:
+            if adapter.replaying:
+                raise ProtocolError("回放期间不解析实时文本")
+            return text_tasks.start(body.text)
+
+    @app.post("/api/v1/text-tasks/clear")
+    async def text_clear(body: EmptyBody | None = None):
+        async with mode_lock:
+            return await text_tasks.clear()
+
+    @app.post("/api/v1/fc-usb/connect")
+    async def fc_usb_connect(body: EmptyBody | None = None):
+        async with mode_lock:
+            if adapter.replaying:
+                raise ProtocolError("请先退出只读回放")
+            adapter.disconnect()
+            return await usb_fc.connect()
+
+    @app.post("/api/v1/fc-usb/disconnect")
+    async def fc_usb_disconnect(body: EmptyBody | None = None):
+        async with mode_lock:
+            return await usb_fc.disconnect()
 
     @app.post("/api/v1/bench/connect")
     async def bench_connect(body: BoardTarget):
@@ -259,6 +376,9 @@ def create_app(root, token, port, user_data):
                 recordings.frame, body.recording_id, body.index
             )
             bench.disconnect()
+            await usb_fc.disconnect()
+            await text_tasks.clear("进入回放，文本建议已清空")
+            await voice.clear()
             adapter.disconnect()
             adapter.replaying = True
             replay_frame = loaded

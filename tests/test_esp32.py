@@ -92,6 +92,49 @@ def modern_health():
                                    "sde_control": 6, "sde_u": 64, "sde_v": 64, "luminance": 50}}
 
 
+def station_health():
+    return {**modern_health(), "firmware": "0.1.6", "wifi_mode": "sta",
+            "wifi_ipv4": "192.168.137.175", "wifi_peer": True, "network_epoch": 9,
+            "wifi_rssi_dbm": -32, "wifi_channel": 11}
+
+
+def test_wifi_diagnostics_are_board_reported_without_credential_passthrough():
+    source = {**station_health(), "ssid": "must-not-render", "password": "must-not-render"}
+    value = health_data({"content-type": "application/json"}, json.dumps(source).encode())
+    assert value["wifi_mode"] == "sta" and value["wifi_ipv4"] == "192.168.137.175"
+    assert (value["wifi_rssi_dbm"], value["wifi_channel"], value["network_epoch"]) == (-32, 11, 9)
+    assert "ssid" not in value and "password" not in value
+    assert value["uart_ready"] is False and value["control_forwarding"] is False
+
+
+def test_older_firmware_cannot_supply_unvalidated_network_fields():
+    source = {**modern_health(), "wifi_mode": "sta", "wifi_ipv4": "untrusted",
+              "network_epoch": 7, "wifi_rssi_dbm": -20, "wifi_channel": 6}
+    value = health_data({"content-type": "application/json"}, json.dumps(source).encode())
+    assert all(value[k] is None for k in ("wifi_mode", "wifi_ipv4", "wifi_peer",
+                                         "network_epoch", "wifi_rssi_dbm", "wifi_channel"))
+
+
+def test_ap_mode_reports_unknown_rssi_without_inventing_signal():
+    source = {**station_health(), "wifi_mode": "ap", "wifi_ipv4": "192.168.4.1",
+              "wifi_rssi_dbm": None, "wifi_channel": None}
+    value = health_data({"content-type": "application/json"}, json.dumps(source).encode())
+    assert value["wifi_mode"] == "ap" and value["wifi_rssi_dbm"] is None
+
+
+@pytest.mark.parametrize("change", [
+    {"wifi_mode": "ap+sta"}, {"wifi_mode": None}, {"wifi_ipv4": "127.0.0.1"},
+    {"wifi_ipv4": "8.8.8.8"}, {"wifi_ipv4": 3232270767}, {"wifi_ipv4": "192.168.137.175/path"},
+    {"wifi_peer": 1}, {"network_epoch": 0}, {"network_epoch": 1 << 32}, {"network_epoch": True},
+    {"wifi_rssi_dbm": True}, {"wifi_rssi_dbm": -128}, {"wifi_rssi_dbm": 1},
+    {"wifi_channel": 0}, {"wifi_channel": 15}, {"wifi_channel": "11"},
+    {"wifi_rssi_dbm": None}, {"wifi_channel": None},
+])
+def test_invalid_network_diagnostics_do_not_reach_renderer(change):
+    with pytest.raises(ProtocolError):
+        health_data({"content-type": "application/json"}, json.dumps({**station_health(), **change}).encode())
+
+
 class SettingsBoard(Board):
     def __init__(self):
         super().__init__()

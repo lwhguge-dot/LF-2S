@@ -589,6 +589,95 @@ def test_terminal_action_result_survives_late_ack_and_wrong_task(tmp_path):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize(
+    "name,outcome,lease,phase,reason,event,task,expected",
+    [
+        ("CANCEL", 0, 0, 3, 0, 19, 4, "completed"),
+        ("FAILSAFE", 0, 0, 3, 0, 19, 4, "completed"),
+        ("END", 1, 0, 7, 15, 19, 4, "failed"),
+        ("END", 0, 9, 3, 0, 19, 4, "completed"),
+        ("TAKEOFF", 0, 0, 4, 10, 0, 4, "rejected"),
+        ("TAKEOFF", 0, 9, 2, 0, 0, 4, "in_progress"),
+        ("CANCEL", 0, 10, 3, 0, 19, 4, "pending"),
+        ("FAILSAFE", 0, 10, 3, 0, 19, 4, "pending"),
+        ("END", 0, 0, 3, 0, 19, 4, "pending"),
+        ("END", 1, 0, 3, 0, 19, 4, "pending"),
+        ("TAKEOFF", 0, 0, 3, 0, 19, 4, "pending"),
+        ("CANCEL", 0, 0, 2, 0, 0, 4, "pending"),
+        ("CANCEL", 0, 0, 4, 10, 0, 4, "rejected"),
+        ("END", 1, 0, 7, 15, 0, 4, "pending"),
+        ("FAILSAFE", 0, 0, 3, 0, 0, 4, "pending"),
+        ("CANCEL", 0, 0, 3, 0, 19, 5, "pending"),
+        ("TAKEOFF", 0, 9, 3, 0, 0, 4, "pending"),
+    ],
+)
+def test_action_result_correlation_after_lease_revocation(
+    tmp_path, name, outcome, lease, phase, reason, event, task, expected
+):
+    from service.adapter import Adapter
+    from service.journal import Journal
+
+    journal = Journal(tmp_path / "logs")
+    adapter = Adapter(ROOT, journal)
+    adapter.connected = True
+    adapter.sim.esp_address = ("127.0.0.1", 1)
+    adapter.sim.pc_address = ("127.0.0.1", 2)
+    adapter.sim.fc_address = ("127.0.0.1", 3)
+    try:
+        raw = adapter.client.hello(nonce=123)
+        hello = adapter.begin_operation("HELLO")
+        adapter.known_requests[1] = (raw, hello["operation_id"])
+        adapter.receive(
+            Codec(1, 1).encode(
+                "LF2S_RESULT",
+                boot_id=7,
+                session_id=(7 << 32) | 1,
+                client_nonce=123,
+                request_id=1,
+                request_msg=60000,
+                echo_op=1,
+                phase=1,
+                target_system=255,
+                target_component=190,
+            ),
+            adapter.sim.esp_address,
+        )
+        values = {"lease_id": 9, "task_id": 4, "reset_counter": 1}
+        if name not in ("CANCEL", "FAILSAFE"):
+            values["valid_ms"] = 500
+        if name == "END":
+            values["outcome"] = outcome
+        raw = adapter.client.action(name, 1, **values)
+        request = decode_datagram(raw)
+        operation = adapter.begin_operation(name)
+        adapter.known_requests[request.request_id] = (raw, operation["operation_id"])
+        before = adapter.rejected
+        adapter.receive(
+            Codec(1, 1).encode(
+                "LF2S_RESULT",
+                boot_id=7,
+                session_id=adapter.client.session,
+                request_id=request.request_id,
+                request_msg=60001,
+                task_id=task,
+                lease_id=lease,
+                echo_op=request.op,
+                phase=phase,
+                reason=reason,
+                event_id=event,
+                target_system=255,
+                target_component=190,
+            ),
+            adapter.sim.esp_address,
+        )
+        assert operation["status"] == expected
+        assert adapter.rejected == before + (expected == "pending")
+        assert not adapter.snapshot()["hardware_control_allowed"]
+    finally:
+        adapter.sim.close()
+        journal.close()
+
+
 def test_explicit_simulator_reset_clears_old_task_binding_and_needs_new_permit(service):
     initial = task_ready(service)
     start_task(service)

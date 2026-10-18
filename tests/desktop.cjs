@@ -26,6 +26,15 @@ const checks = [],
   rendererErrors = [],
   externalRequests = [];
 const report = {
+  application_version: JSON.parse(
+    fs.readFileSync(
+      path.join(
+        distribution,
+        packaged ? "resources/app/package.json" : "package.json",
+      ),
+      "utf8",
+    ),
+  ).version,
   mode: packaged
     ? "bundled Windows x64, system-only PATH"
     : "development Electron + isolated Python",
@@ -95,6 +104,11 @@ async function launch(profile) {
     "service did not become ready",
     20000,
   );
+  await page.getByTestId("workspace-tools").click();
+  await page
+    .getByRole("navigation", { name: "主导航" })
+    .getByRole("button", { name: "监控总览" })
+    .click();
   await page
     .getByRole("button", { name: "连接模拟设备", exact: true })
     .waitFor();
@@ -134,7 +148,11 @@ async function main() {
     const startup = await state(page);
     check(
       "startup_does_not_automatically_connect_or_replay",
-      startup.link.phase === "disconnected",
+      startup.link.phase === "disconnected" &&
+        startup.controller.available === false &&
+        (await page.getByTestId("controller-mode").textContent()).includes(
+          "未知",
+        ),
     );
     await page
       .getByRole("button", { name: "ESP32 实物台架", exact: false })
@@ -198,6 +216,22 @@ async function main() {
         initial.profile.fields.config_valid === 0 &&
         initial.qualification.control_allowed === false,
     );
+    check(
+      "controller_zero_codes_are_current_reports_without_real_qualification",
+      initial.controller.available &&
+        initial.controller.mode_code === 0 &&
+        initial.controller.failsafe_reason_code === 0 &&
+        initial.controller.preflight === false &&
+        (await page.getByTestId("controller-mode").textContent()).includes(
+          "空闲",
+        ) &&
+        (await page.getByTestId("controller-reason").textContent()).includes(
+          "未上报失效原因",
+        ) &&
+        (await page.getByTestId("controller-preflight").textContent()).includes(
+          "未满足",
+        ),
+    );
     const expected = (
       (BigInt(initial.identity.boot_id) << 32n) |
       1n
@@ -222,7 +256,7 @@ async function main() {
       isolation.node === "undefined" &&
         isolation.process === "undefined" &&
         isolation.keys.join(",") ===
-          "benchConnect,benchDisconnect,benchFocus,benchPreview,benchSettings,connect,disconnect,image,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart" &&
+          "benchConnect,benchDisconnect,benchFocus,benchPreview,benchSettings,connect,disconnect,fcUsbConnect,fcUsbDisconnect,image,microphone,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart,textClear,textParse,voiceClear,voiceTranscribe" &&
         prefs.contextIsolation &&
         prefs.sandbox &&
         !prefs.nodeIntegration &&
@@ -279,6 +313,10 @@ async function main() {
     check(
       "paused_network_expires_telemetry_image_and_query_ui",
       (await page.getByRole("button", { name: "读取协议配置" }).isDisabled()) &&
+        (await state(page)).controller.available === false &&
+        (await page.getByTestId("controller-mode").textContent()).includes(
+          "未知",
+        ) &&
         (await page.getByTestId("sensor-height").textContent()).includes(
           "未知",
         ),
@@ -297,7 +335,11 @@ async function main() {
         value + "_chinese_rejection",
         (
           await page.locator(".connection-panel .explanation").textContent()
-        ).includes(reason),
+        ).includes(reason) &&
+          (await state(page)).controller.available === false &&
+          (await page.getByTestId("controller-mode").textContent()).includes(
+            "未知",
+          ),
       );
     }
     await scenario(page, "healthy");
@@ -348,6 +390,11 @@ async function main() {
     const sent = (await state(page)).counters.sent;
     await page.context().setOffline(true);
     await page.reload();
+    await page.getByTestId("workspace-tools").click();
+    await page
+      .getByRole("navigation", { name: "主导航" })
+      .getByRole("button", { name: "监控总览" })
+      .click();
     await page
       .getByTestId("link")
       .filter({ hasText: "模拟链路在线" })
@@ -377,7 +424,8 @@ async function main() {
     await page.getByTestId("link").filter({ hasText: "校验失败" }).waitFor();
     check(
       "fc_reboot_invalidates_old_profile",
-      (await state(page)).profile === null,
+      (await state(page)).profile === null &&
+        (await state(page)).controller.available === false,
     );
     await page.getByRole("button", { name: "断开", exact: true }).click();
     await page.getByTestId("link").filter({ hasText: "尚未连接" }).waitFor();
@@ -391,7 +439,12 @@ async function main() {
     await page.getByTestId("service-error").waitFor();
     check(
       "backend_exit_visible_and_cached_numbers_invalidated",
-      (await page.getByTestId("sensor-height").textContent()).includes("未知"),
+      (await page.getByTestId("sensor-height").textContent()).includes(
+        "未知",
+      ) &&
+        (await page.getByTestId("controller-mode").textContent()).includes(
+          "未知",
+        ),
     );
     await page.getByRole("button", { name: "重启本地服务" }).click();
     await page.getByTestId("link").filter({ hasText: "尚未连接" }).waitFor();

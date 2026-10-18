@@ -1,0 +1,217 @@
+{
+  "application_version": "0.5.0",
+  "scope": "Physical vendor USB input and display; no UART or control qualification",
+  "runs": {
+    "dev": {
+      "passed": true,
+      "application_version": "0.5.0",
+      "physical_usb": true,
+      "checks": [
+        {
+          "name": "startup_does_not_open_hardware",
+          "passed": true
+        },
+        {
+          "name": "real_source_and_display_only",
+          "passed": true
+        },
+        {
+          "name": "no_synthetic_or_mavlink_identity",
+          "passed": true
+        },
+        {
+          "name": "unknowns_not_filled_from_placeholders",
+          "passed": true
+        },
+        {
+          "name": "physical_mode_rejects_simulation_and_task_requests",
+          "passed": true
+        },
+        {
+          "name": "continuous_live_reports_and_values",
+          "passed": true
+        },
+        {
+          "name": "no_checksum_report_read_or_log_error",
+          "passed": true
+        },
+        {
+          "name": "actual_svg_chart_and_rc_channels",
+          "passed": true
+        },
+        {
+          "name": "disconnect_clears_values_and_history",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "last_live_frames": 5015,
+      "raw_report_count": 1776,
+      "closed_sessions": [
+        {
+          "epoch": 1,
+          "counters": {
+            "reports": 1776,
+            "frames": 5163,
+            "checksum_failures": 0,
+            "discarded_stream_bytes": 5
+          }
+        }
+      ],
+      "raw_sha256": "38b4d82836381f5eb23d665eec0a2f3b794fa47cf71c78e9fd5d9abafe2cf572",
+      "mavlink_session_established": false,
+      "hardware_control_allowed": false
+    },
+    "package": {
+      "passed": true,
+      "application_version": "0.5.0",
+      "physical_usb": true,
+      "checks": [
+        {
+          "name": "startup_does_not_open_hardware",
+          "passed": true
+        },
+        {
+          "name": "real_source_and_display_only",
+          "passed": true
+        },
+        {
+          "name": "no_synthetic_or_mavlink_identity",
+          "passed": true
+        },
+        {
+          "name": "unknowns_not_filled_from_placeholders",
+          "passed": true
+        },
+        {
+          "name": "physical_mode_rejects_simulation_and_task_requests",
+          "passed": true
+        },
+        {
+          "name": "continuous_live_reports_and_values",
+          "passed": true
+        },
+        {
+          "name": "no_checksum_report_read_or_log_error",
+          "passed": true
+        },
+        {
+          "name": "actual_svg_chart_and_rc_channels",
+          "passed": true
+        },
+        {
+          "name": "disconnect_clears_values_and_history",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "last_live_frames": 5082,
+      "raw_report_count": 1797,
+      "closed_sessions": [
+        {
+          "epoch": 1,
+          "counters": {
+            "reports": 1797,
+            "frames": 5224,
+            "checksum_failures": 0,
+            "discarded_stream_bytes": 3
+          }
+        }
+      ],
+      "raw_sha256": "59847aa14eb5d7a91a5ce686e2704a885a3b465c4e12809c7d865d79920c4839",
+      "mavlink_session_established": false,
+      "hardware_control_allowed": false
+    },
+    "package-usb-removal": {
+      "passed": true,
+      "application_version": "0.5.0",
+      "physical_usb": true,
+      "checks": [
+        {
+          "name": "startup_does_not_open_hardware",
+          "passed": true
+        },
+        {
+          "name": "real_source_and_display_only",
+          "passed": true
+        },
+        {
+          "name": "no_synthetic_or_mavlink_identity",
+          "passed": true
+        },
+        {
+          "name": "unknowns_not_filled_from_placeholders",
+          "passed": true
+        },
+        {
+          "name": "physical_mode_rejects_simulation_and_task_requests",
+          "passed": true
+        },
+        {
+          "name": "continuous_live_reports_and_values",
+          "passed": true
+        },
+        {
+          "name": "no_checksum_report_read_or_log_error",
+          "passed": true
+        },
+        {
+          "name": "actual_svg_chart_and_rc_channels",
+          "passed": true
+        },
+        {
+          "name": "physical_unplug_clears_live_values",
+          "passed": true
+        },
+        {
+          "name": "physical_replug_does_not_automatically_reopen",
+          "passed": true
+        },
+        {
+          "name": "explicit_reconnect_changes_epoch_and_restores_values",
+          "passed": true
+        },
+        {
+          "name": "disconnect_clears_values_and_history",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "last_live_frames": 5029,
+      "raw_report_count": 8866,
+      "closed_sessions": [
+        {
+          "epoch": 1,
+          "counters": {
+            "reports": 8848,
+            "frames": 25726,
+            "checksum_failures": 0,
+            "discarded_stream_bytes": 6,
+            "read_errors": 1
+          }
+        },
+        {
+          "epoch": 2,
+          "counters": {
+            "reports": 18,
+            "frames": 51,
+            "checksum_failures": 0,
+            "discarded_stream_bytes": 9
+          }
+        }
+      ],
+      "raw_sha256": "7123417b1f15148b60437f492708e6ae8a8042a3fb1e30d8edd065685f7b77a9",
+      "mavlink_session_established": false,
+      "hardware_control_allowed": false
+    }
+  }
+}

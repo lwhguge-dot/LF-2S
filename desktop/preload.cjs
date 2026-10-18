@@ -21,6 +21,14 @@ contextBridge.exposeInMainWorld(
     benchConnect: (host, port) =>
       ipcRenderer.invoke("station:benchConnect", host, port),
     benchDisconnect: () => ipcRenderer.invoke("station:benchDisconnect"),
+    fcUsbConnect: () => ipcRenderer.invoke("station:fcUsbConnect"),
+    fcUsbDisconnect: () => ipcRenderer.invoke("station:fcUsbDisconnect"),
+    textParse: (text) => ipcRenderer.invoke("station:textParse", text),
+    textClear: () => ipcRenderer.invoke("station:textClear"),
+    microphone: (enabled) => ipcRenderer.invoke("station:microphone", enabled),
+    voiceTranscribe: (audio) =>
+      ipcRenderer.invoke("station:voiceTranscribe", audio),
+    voiceClear: () => ipcRenderer.invoke("station:voiceClear"),
     benchFocus: () => ipcRenderer.invoke("station:benchFocus"),
     benchPreview: () => ipcRenderer.invoke("station:benchPreview"),
     benchSettings: (size, colour) =>

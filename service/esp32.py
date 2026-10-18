@@ -35,7 +35,7 @@ def target(host, port):
     try:
         address = ipaddress.IPv4Address(host)
     except (ValueError, TypeError) as exc:
-        raise ProtocolError("请输入 ESP32 热点的 IPv4 地址") from exc
+        raise ProtocolError("请输入 ESP32 当前的 IPv4 地址") from exc
     if not any(address in network for network in PRIVATE_NETWORKS):
         raise ProtocolError("仅允许局域网 IPv4 地址")
     if type(port) is not int or not 1 <= port <= 65535:
@@ -226,8 +226,24 @@ def health_data(headers, data):
                 if type(value) is not int or not (-1 if not diagnostics["valid"] else 0) <= value <= 0xFFFFF:
                     raise ValueError
             health["sensor_diagnostics"] = {field: diagnostics[field] for field in ("valid", *names)}
+        if int(health["firmware"].split(".")[2]) >= 6:
+            if health["wifi_mode"] not in ("ap", "sta") or type(health["wifi_peer"]) is not bool:
+                raise ValueError
+            if type(health["wifi_ipv4"]) is not str:
+                raise ValueError
+            address = ipaddress.IPv4Address(health["wifi_ipv4"])
+            if not any(address in network for network in PRIVATE_NETWORKS):
+                raise ValueError
+            health["wifi_ipv4"] = str(address)
+            unsigned(health["network_epoch"], 32, positive=True)
+            rssi, channel = health["wifi_rssi_dbm"], health["wifi_channel"]
+            if (rssi is not None and (type(rssi) is not int or not -127 <= rssi <= 0)
+                    or channel is not None and (type(channel) is not int or not 1 <= channel <= 14)):
+                raise ValueError
+            if health["wifi_mode"] == "sta" and (rssi is None) != (channel is None):
+                raise ValueError
     except (ValueError, KeyError, TypeError, ProtocolError) as exc:
-        raise ProtocolError("板卡协议或台架配置不匹配；需要 0.1.3 相机台架固件") from exc
+        raise ProtocolError("板卡协议或台架配置不匹配；需要兼容的 0.1.3 及以上相机台架固件") from exc
     # Only expose bounded, known diagnostics to the renderer.
     fields = ("firmware", "protocol", "dialect_hash", "sensor_pid", "camera_stream_id",
               "preview_width", "preview_height", "jpeg_quality", "autofocus_initialized",
@@ -236,7 +252,11 @@ def health_data(headers, data):
               "udp_validated", "udp_rejected", "uart_ready", "control_forwarding",
               "physical_freshness_qualified", "calibration_id", "test_pattern", "preview_colour",
               "capture_wait_us", "queue_wait_us", "send_us", "sensor_bench_frames", "sensor_bench_us",
-              "sensor_diagnostics")
+              "sensor_diagnostics", "wifi_mode", "wifi_ipv4", "wifi_peer", "network_epoch",
+              "wifi_rssi_dbm", "wifi_channel")
+    if int(health["firmware"].split(".")[2]) < 6:
+        health = {**health, **{field: None for field in (
+            "wifi_mode", "wifi_ipv4", "wifi_peer", "network_epoch", "wifi_rssi_dbm", "wifi_channel")}}
     return {field: health.get(field) for field in fields}
 
 
@@ -332,7 +352,7 @@ class Esp32Bench:
         self.journal.add("warning", "ESP32 HTTP 传输暂时失败", source="esp32_bench", simulation=False,
                          **self.last_error, method=method, attempt=self.failure_streak)
         if self.failure_streak >= 3:
-            self.fail("连续三次无法读取 ESP32；请确认电脑仍连接板卡热点，再断开并重新连接")
+            self.fail("连续三次无法读取 ESP32；请核对两端 Wi-Fi 和板卡当前 IPv4 地址，再断开并重新连接")
         else:
             self.phase = "recovering"
             self.health = None

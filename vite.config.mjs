@@ -4,5 +4,10 @@ export default defineConfig({
   root: "frontend",
   base: "./",
   plugins: [vue()],
-  build: { outDir: "../build/ui", emptyOutDir: true, sourcemap: false },
+  build: {
+    outDir: "../build/ui",
+    emptyOutDir: true,
+    sourcemap: false,
+    assetsInlineLimit: 0,
+  },
 });

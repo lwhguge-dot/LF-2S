@@ -12,6 +12,18 @@ from licenses import collect
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = json.loads((ROOT / "package.json").read_text("utf-8"))["version"]
 PUBLIC_EVIDENCE = (
+    "workbench-public-summary.json",
+    "workbench-package-idle.png",
+    "workbench-package-road.png",
+    "workbench-package-cash.png",
+    "workbench-package-mobile.png",
+    "design-source-desktop.png",
+    "design-source-mobile.png",
+    "design-comparison-package.png",
+    "design-comparison-mobile.png",
+    "design-detail-package-header.png",
+    "design-detail-package-right.png",
+    "design-detail-package-assistant.png",
     "README.md",
     "验收报告.md",
     "acceptance.json",
@@ -19,6 +31,8 @@ PUBLIC_EVIDENCE = (
     "preview-stability-summary.json",
     "preview-performance-summary.json",
     "package-overview.png",
+    "package-controller-fault.png",
+    "controller-diagnostics-summary.json",
     "package-stale.png",
     "package-logs.png",
     "package-compact.png",
@@ -26,6 +40,13 @@ PUBLIC_EVIDENCE = (
     "package-task-completed.png",
     "package-replay.png",
     "package-bench-disconnected.png",
+    "fc-usb-public-summary.json",
+    "fc-usb-package-online.png",
+    "fc-usb-package-disconnected.png",
+    "text-public-summary.json",
+    "text-package-review.png",
+    "voice-public-summary.json",
+    "voice-package-review.png",
 )
 
 
@@ -52,6 +73,7 @@ def source_inputs():
             "scripts/package.py",
             "scripts/licenses.py",
             "scripts/sync_protocol.py",
+            "scripts/Start-CompanyModel.ps1",
         )
     )
     return {
@@ -63,8 +85,13 @@ def source_inputs():
 
 
 def update_documents(destination):
+    shutil.copyfile(
+        ROOT / "scripts/Start-CompanyModel.ps1", destination / "Start-CompanyModel.ps1"
+    )
     for file in ("README.md", "THIRD_PARTY.md", "CHANGELOG.md"):
         shutil.copyfile(ROOT / file, destination / file)
+    if (ROOT / "design-qa.md").is_file():
+        shutil.copyfile(ROOT / "design-qa.md", destination / "design-qa.md")
     # Electron's own LICENSE must remain under its original name.
     shutil.copyfile(ROOT / "LICENSE", destination / "LF2S-LICENSE.txt")
     shutil.copytree(ROOT / "docs", destination / "docs", dirs_exist_ok=True)
@@ -83,7 +110,7 @@ def manifest(destination):
     manifest = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "version": VERSION,
-        "scope": "ESP32 display-only camera bench and S0–S2 simulation/replay; not FC, optical timing or flight acceptance",
+        "scope": "Visual task workbench and non-thinking text suggestions, Mandarin review, vendor FC USB and ESP32 benches; S0–S2 simulation/replay; no live vision, company ASR deployment, human Mandarin, UART/control or flight acceptance",
         "directory": destination.name,
         "source_sha256_lf": source_inputs(),
         "files": [],

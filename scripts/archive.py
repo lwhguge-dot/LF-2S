@@ -78,6 +78,16 @@ def main():
         },
         check=True,
     )
+    subprocess.run(
+        [shutil.which("node"), str(ROOT / "tests/workbench_desktop.cjs"), "--packaged"],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "LF2S_TEST_DISTRIBUTION": str(directory),
+            "LF2S_WORKBENCH_MODE": "archive",
+        },
+        check=True,
+    )
     report = {
         "passed": True,
         "archive": archive.name,
@@ -85,15 +95,29 @@ def main():
         "bytes": archive.stat().st_size,
         "manifest_files": len(manifest["files"]),
         "extracted_desktop_report": "desktop-archive.json",
+        "extracted_workbench_report": "workbench-archive.json",
         "scope": "Extracted Windows bundle on the same host; not cross-host or hardware acceptance",
     }
     (ROOT / "evidence/archive-integrity.json").write_text(
         json.dumps(report, indent=2) + "\n", "utf-8"
     )
     desktop = json.loads((ROOT / "evidence/desktop-archive.json").read_text("utf-8"))
+    workbench = json.loads(
+        (ROOT / "evidence/workbench-archive.json").read_text("utf-8")
+    )
+    if not workbench["passed"] or workbench["application_version"] != VERSION:
+        raise ValueError("Extracted workbench must match and pass the release version")
     (assets / f"{NAME}.verification.json").write_text(
         json.dumps(
-            {**report, "checks": desktop["checks"], "runtime": desktop["runtime"]},
+            {
+                **report,
+                "checks": desktop["checks"]
+                + [
+                    {**row, "name": "workbench:" + row["name"]}
+                    for row in workbench["checks"]
+                ],
+                "runtime": desktop["runtime"],
+            },
             ensure_ascii=False,
             indent=2,
         )

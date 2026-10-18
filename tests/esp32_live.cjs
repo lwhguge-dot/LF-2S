@@ -6,6 +6,7 @@ const { _electron } = require("playwright");
 const root = path.resolve(__dirname, "..");
 const packaged = process.argv.includes("--packaged");
 const suffix = packaged ? "package" : "dev";
+const boardHost = process.env.LF2S_ESP32_HOST || "192.168.4.1";
 const output = path.join(root, "evidence");
 const report = {
   passed: false,
@@ -94,9 +95,11 @@ async function main() {
       "service_not_ready",
       20000,
     );
+    await page.getByTestId("workspace-tools").click();
     await page
       .getByRole("button", { name: "ESP32 实物台架", exact: false })
       .click();
+    await page.getByLabel("ESP32 IPv4 地址", { exact: true }).fill(boardHost);
     await page
       .getByRole("button", { name: "连接实物台架", exact: true })
       .click();
@@ -108,6 +111,24 @@ async function main() {
     );
     const state = await page.evaluate(() => window.lf2s.state());
     report.health = state.bench.health;
+    report.board_host = boardHost;
+    if (state.bench.health.wifi_mode) {
+      const networkLabel =
+        state.bench.health.wifi_mode === "sta"
+          ? "板卡连接电脑热点"
+          : "板卡提供热点";
+      check(
+        "physical_network_diagnostics_render_from_board",
+        (await page.getByTestId("wifi-mode").innerText()) === networkLabel &&
+          (await page.getByTestId("wifi-ipv4").innerText()) ===
+            state.bench.health.wifi_ipv4 &&
+          (await page.getByTestId("wifi-signal").innerText()).includes(
+            state.bench.health.wifi_rssi_dbm == null
+              ? "未知"
+              : String(state.bench.health.wifi_rssi_dbm),
+          ),
+      );
+    }
     check(
       "real_mode_and_unknown_fc_measurements",
       state.mode === "esp32_bench" &&
@@ -191,7 +212,11 @@ async function main() {
       await until(
         async () => {
           const b = (await page.evaluate(() => window.lf2s.state())).bench;
-          return b.phase === "online" && b.health?.preview_width === 320;
+          return (
+            b.phase === "online" &&
+            b.health?.preview_width === 320 &&
+            b.health.camera_stream_id !== before
+          );
         },
         "qvga_settings_not_verified",
         16000,
@@ -218,6 +243,8 @@ async function main() {
         "one_fps_mode_caps_new_display_frames",
         seen.size >= 2 && seen.size <= 7,
       );
+      const beforeVga = (await page.evaluate(() => window.lf2s.state())).bench
+        .health.camera_stream_id;
       await page.getByLabel("画面尺寸", { exact: true }).selectOption("vga");
       await page
         .getByRole("button", { name: "应用画面设置", exact: true })
@@ -225,7 +252,11 @@ async function main() {
       await until(
         async () => {
           const b = (await page.evaluate(() => window.lf2s.state())).bench;
-          return b.phase === "online" && b.health?.preview_width === 640;
+          return (
+            b.phase === "online" &&
+            b.health?.preview_width === 640 &&
+            b.health.camera_stream_id !== beforeVga
+          );
         },
         "vga_settings_not_verified",
         16000,

@@ -1,16 +1,16 @@
 {
-  "date": "2026-10-16T22:59:54.522297+08:00",
+  "date": "2026-10-18T12:53:08.783491+08:00",
   "platform": "Windows-11-10.0.26200-SP0",
-  "stage": "S0–S2 + ESP32 display bench",
-  "version": "0.4.0",
+  "stage": "Visual task workbench + S0–S2 + vendor FC USB display bench + Mandarin review + non-thinking suggestions",
+  "version": "0.8.0",
   "backend": {
-    "tests": 75,
+    "tests": 272,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "development_desktop_checks": 37,
-  "packaged_desktop_checks": 37,
+  "development_desktop_checks": 42,
+  "packaged_desktop_checks": 42,
   "packaged_runtime": {
     "versions": {
       "node": "24.21.0",
@@ -49,197 +49,771 @@
     "arch": "x64"
   },
   "cleanup": {
-    "passed": true,
-    "checked_at": "2026-10-16T22:58:12.3067240+08:00",
+    "processes": [],
     "scope": "Only this application workspace; unrelated processes are not terminated",
-    "processes": []
+    "passed": true,
+    "checked_at": "2026-10-18T12:44:08.4682372+08:00"
   },
   "passed": true,
-  "scope": "synthetic tasks/replay and ESP32 display-only bench; no STM32, optical timing or flight acceptance",
-  "esp32_display_bench": {
+  "scope": "synthetic tasks/replay, vendor FC USB input and ESP32 display benches; no UART/control, optical timing or flight acceptance",
+  "fc_usb_display_bench": {},
+  "company_text_suggestions": {
     "dev": {
       "passed": true,
-      "checks": 21,
-      "frames": 12,
-      "firmware": "0.1.5"
+      "checks": [
+        {
+          "name": "configured_non_thinking_no_startup_request",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_0",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_0",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_1",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_1",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_2",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_2",
+          "passed": true
+        },
+        {
+          "name": "exact_original_units_visible",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_3",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_3",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_4",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_4",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_5",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_5",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_6",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_6",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_7",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_7",
+          "passed": true
+        },
+        {
+          "name": "editing_hides_previous_suggestion",
+          "passed": true
+        },
+        {
+          "name": "cancel_does_not_restore_late_result",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "thinking_enabled": false,
+      "cases": [
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 2360
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1906
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1782
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1828
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1953
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1625
+        }
+      ]
     },
     "package": {
       "passed": true,
-      "checks": 21,
-      "frames": 12,
-      "firmware": "0.1.5"
+      "checks": [
+        {
+          "name": "configured_non_thinking_no_startup_request",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_0",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_0",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_1",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_1",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_2",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_2",
+          "passed": true
+        },
+        {
+          "name": "exact_original_units_visible",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_3",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_3",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_4",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_4",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_5",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_5",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_6",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_6",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_7",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_7",
+          "passed": true
+        },
+        {
+          "name": "editing_hides_previous_suggestion",
+          "passed": true
+        },
+        {
+          "name": "cancel_does_not_restore_late_result",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "thinking_enabled": false,
+      "cases": [
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 2375
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1766
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1797
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1750
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1500
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 2657
+        }
+      ]
     }
   },
+  "mandarin_transcription_review": {
+    "dev": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_startup_audio_or_model_request",
+          "passed": true
+        },
+        {
+          "name": "microphone_denied_before_record_click",
+          "passed": true
+        },
+        {
+          "name": "video_permission_stays_denied",
+          "passed": true
+        },
+        {
+          "name": "recording_is_local_until_explicit_submit",
+          "passed": true
+        },
+        {
+          "name": "explicit_save_matches_submitted_wav",
+          "passed": true
+        },
+        {
+          "name": "audio_graph_and_ipc_produce_bounded_mono_pcm",
+          "passed": true
+        },
+        {
+          "name": "transcription_does_not_parse_or_authorize",
+          "passed": true
+        },
+        {
+          "name": "adoption_only_fills_editable_original",
+          "passed": true
+        },
+        {
+          "name": "explicit_parse_keeps_non_thinking_and_no_action",
+          "passed": true
+        },
+        {
+          "name": "permission_revoked_after_recording",
+          "passed": true
+        },
+        {
+          "name": "cancel_drops_late_transcript_and_audio",
+          "passed": true
+        },
+        {
+          "name": "actual_local_cpu_reference_reaches_vue_review",
+          "passed": true
+        },
+        {
+          "name": "reviewer_can_correct_text_before_parse",
+          "passed": true
+        },
+        {
+          "name": "new_audio_adoption_hides_previous_text_suggestion",
+          "passed": true
+        },
+        {
+          "name": "explicit_corrected_text_reaches_actual_company_model",
+          "passed": true
+        },
+        {
+          "name": "page_unmount_stops_audio_and_discards_transcript",
+          "passed": true
+        },
+        {
+          "name": "returning_does_not_restore_audio_or_transcript",
+          "passed": true
+        },
+        {
+          "name": "fifteen_second_limit_stops_device",
+          "passed": true
+        },
+        {
+          "name": "backend_restart_discards_audio_and_old_results",
+          "passed": true
+        },
+        {
+          "name": "renderer_has_no_errors",
+          "passed": true
+        }
+      ],
+      "fake_microphone": true,
+      "real_local_asr": true,
+      "company_asr": false,
+      "company_model": true,
+      "reference": {
+        "input": "upstream test_wavs/zh.wav",
+        "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
+        "duration_ms": 5592,
+        "elapsed_ms": 125,
+        "processing_ms": 119.7,
+        "transcript": "开饭时间早上9点至下午5点。",
+        "independent_truth_available": false
+      },
+      "corrected_reference_task": {
+        "user_corrected_source": true,
+        "company_model": true,
+        "original_reference_is_not_a_flight_command": true,
+        "elapsed_ms": 2578,
+        "phase": "review",
+        "thinking_enabled": false
+      },
+      "human_mandarin_accuracy_accepted": false
+    },
+    "package": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "no_startup_audio_or_model_request",
+          "passed": true
+        },
+        {
+          "name": "microphone_denied_before_record_click",
+          "passed": true
+        },
+        {
+          "name": "video_permission_stays_denied",
+          "passed": true
+        },
+        {
+          "name": "recording_is_local_until_explicit_submit",
+          "passed": true
+        },
+        {
+          "name": "explicit_save_matches_submitted_wav",
+          "passed": true
+        },
+        {
+          "name": "audio_graph_and_ipc_produce_bounded_mono_pcm",
+          "passed": true
+        },
+        {
+          "name": "transcription_does_not_parse_or_authorize",
+          "passed": true
+        },
+        {
+          "name": "adoption_only_fills_editable_original",
+          "passed": true
+        },
+        {
+          "name": "explicit_parse_keeps_non_thinking_and_no_action",
+          "passed": true
+        },
+        {
+          "name": "permission_revoked_after_recording",
+          "passed": true
+        },
+        {
+          "name": "cancel_drops_late_transcript_and_audio",
+          "passed": true
+        },
+        {
+          "name": "actual_local_cpu_reference_reaches_vue_review",
+          "passed": true
+        },
+        {
+          "name": "reviewer_can_correct_text_before_parse",
+          "passed": true
+        },
+        {
+          "name": "new_audio_adoption_hides_previous_text_suggestion",
+          "passed": true
+        },
+        {
+          "name": "explicit_corrected_text_reaches_actual_company_model",
+          "passed": true
+        },
+        {
+          "name": "page_unmount_stops_audio_and_discards_transcript",
+          "passed": true
+        },
+        {
+          "name": "returning_does_not_restore_audio_or_transcript",
+          "passed": true
+        },
+        {
+          "name": "fifteen_second_limit_stops_device",
+          "passed": true
+        },
+        {
+          "name": "backend_restart_discards_audio_and_old_results",
+          "passed": true
+        },
+        {
+          "name": "renderer_has_no_errors",
+          "passed": true
+        }
+      ],
+      "fake_microphone": true,
+      "real_local_asr": true,
+      "company_asr": false,
+      "company_model": true,
+      "reference": {
+        "input": "upstream test_wavs/zh.wav",
+        "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
+        "duration_ms": 5592,
+        "elapsed_ms": 281,
+        "processing_ms": 240.18,
+        "transcript": "开饭时间早上9点至下午5点。",
+        "independent_truth_available": false
+      },
+      "corrected_reference_task": {
+        "user_corrected_source": true,
+        "company_model": true,
+        "original_reference_is_not_a_flight_command": true,
+        "elapsed_ms": 2812,
+        "phase": "review",
+        "thinking_enabled": false
+      },
+      "human_mandarin_accuracy_accepted": false
+    }
+  },
+  "esp32_display_bench": {},
+  "esp32_latest_attempts": {},
   "preview_stability": null,
-  "preview_performance": {
-    "created_at": "2026-10-16T14:58:41.718242+00:00",
-    "application_version": "0.4.0",
-    "firmware": "0.1.5",
-    "hardware": "paired ESP32-S3 / OV5640",
-    "provider_sha256_lf": "cd33c6a94852208e2faa0fe059eb06c1da6839827ce4f2617c4ec9404c93479f",
-    "firmware_app_sha256": "5f9c419690757b2ccdc8e6e93c24548ac40a9a55d5f1b5753effbb1b631cfc12",
-    "scope": "Finite local display-only JPEG and desktop measurements; no recognition, optical timing, range or flight acceptance",
-    "historical_baseline": {
-      "application_version": "0.3.1",
-      "firmware": "0.1.4",
-      "frames": 54,
-      "elapsed_ms": 60125,
-      "received_fps": 0.898,
-      "comparable_scene_and_lighting": false
-    },
-    "direct_http_modes": {
-      "qvga": {
-        "width": 320,
-        "height": 240,
-        "jpeg_quantizer": 16,
-        "http_keepalive": true,
-        "frames": 101,
-        "elapsed_ms": 12015.0,
-        "busy_responses": 0,
-        "received_fps": 8.406,
-        "http_ms": {
-          "mean": 106.06,
-          "median": 98.93,
-          "p95": 177.72,
-          "max": 232.34
+  "preview_performance": null,
+  "controller_protocol_diagnostics": {
+    "application_version": "0.8.0",
+    "scope": "Current protocol report display; saved85C byte ingress and real Electron simulation UI, no physical UART/control",
+    "backend_regressions": 14,
+    "saved_C_scenarios": 2,
+    "saved_C_unique_frames": 24,
+    "C_elf_sha256": "7ca47c1585c3a4d23ef39fca3609621c2bd78994569e45bcd85b80619d2af05c",
+    "actual_desktop_checks_each": 42,
+    "specific_desktop_checks": [
+      "controller_zero_codes_are_current_reports_without_real_qualification",
+      "current_fault_reason_and_revoked_permission_are_visible_in_actual_renderer",
+      "current_manual_latch_is_visible_without_creating_control_permission",
+      "expired_fault_diagnostics_are_cleared_in_actual_renderer",
+      "live_controller_diagnostics_do_not_reuse_historical_replay_state"
+    ],
+    "old_report_cleared_on_stale_block_reboot_replay_bench_or_service_failure": true,
+    "no_new_hardware_or_action_transport": true,
+    "source_sha256_lf": {
+      "service/controller.py": "1a441cf232b328da66824d0f2a0fbbb2e5b45e4b91175479e0c803d1686c3fc7",
+      "service/adapter.py": "2af50f7ac757bcb991fec95064402b5703e903e71927ae4b83e674738d88789e",
+      "service/app.py": "63ce4ef5a2a4ed5293194a203935d521f108bc176546c13ddeef0f3f0e5dd268",
+      "frontend/ControllerPanel.vue": "e716f31f2a4343841819abfd57b5f0fb9f0970a7f30cc09ffdfdb71526d9faab",
+      "frontend/App.vue": "9505561795e8ea9cb2b0c526ec9d8563884c2f6de19a51a9686f52c30cfad87b",
+      "frontend/bridge.ts": "3563cc361a0bed33867450ca0dc1555bbaa73b8031995fd56a23e03801763421",
+      "tests/test_controller.py": "bba127d8926e7e9b1c73e408d4a8be9b2ac26a53e953b22e1c4a2e9028f3627b",
+      "tests/desktop.cjs": "2ec90f50fb9fe10bed8bd59996a1f9222e293298a20f6c0c1eba9a9f9348de68",
+      "tests/s2_desktop.cjs": "ec64ad37a70986926f21fa362a9d4c05893fade3c433a13da307b9052921e548",
+      "tests/fixtures/fc-estimator-fault-arm.json": "04dbef20a6602b9ab366bb271a2b5b8007f23d1181e24d1847043cb943a69670",
+      "package.json": "f04ec27c457a8246072d783f5472087d07adb2f95de585df8c04494b7705ec65"
+    }
+  },
+  "visual_task_workbench": {
+    "dev": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "default_is_workbench_with_no_automatic_connection",
+          "passed": true
         },
-        "jpeg_bytes": {
-          "mean": 6153.74,
-          "median": 6131,
-          "p95": 6160,
-          "max": 8463
+        {
+          "name": "initial_camera_empty_and_model_has_no_startup_request",
+          "passed": true
         },
-        "wifi_restored": true
-      },
-      "vga": {
-        "width": 640,
-        "height": 480,
-        "jpeg_quantizer": 12,
-        "http_keepalive": true,
-        "frames": 71,
-        "elapsed_ms": 12921.0,
-        "busy_responses": 0,
-        "received_fps": 5.495,
-        "http_ms": {
-          "mean": 170.51,
-          "median": 111.21,
-          "p95": 390.64,
-          "max": 1978.98
+        {
+          "name": "camera_is_primary_and_no_horizontal_overflow",
+          "passed": true
         },
-        "jpeg_bytes": {
-          "mean": 27877.69,
-          "median": 27878,
-          "p95": 28025,
-          "max": 28096
+        {
+          "name": "assistant_camera_and_results_share_desktop_view",
+          "passed": true
         },
-        "wifi_restored": true,
-        "api_gates": {
-          "passed": true,
-          "cases": 8
+        {
+          "name": "mobile_workbench_stacks_without_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "scenario_only_fills_source_without_request",
+          "passed": true
+        },
+        {
+          "name": "new_road_intent_and_exact_source_reach_right_panel",
+          "passed": true
+        },
+        {
+          "name": "proposal_sends_no_protocol_or_permission",
+          "passed": true
+        },
+        {
+          "name": "image_recognition_does_not_come_from_text_suggestion",
+          "passed": true
+        },
+        {
+          "name": "editing_clears_previous_proposal",
+          "passed": true
+        },
+        {
+          "name": "cash_intent_has_unknown_count_and_total",
+          "passed": true
+        },
+        {
+          "name": "late_model_result_does_not_replace_edited_source",
+          "passed": true
+        },
+        {
+          "name": "detailed_connection_and_controller_tools_still_work",
+          "passed": true
+        },
+        {
+          "name": "synthetic_picture_really_decodes_and_remains_labelled",
+          "passed": true
+        },
+        {
+          "name": "goto_B_is_not_automatically_money_counting",
+          "passed": true
+        },
+        {
+          "name": "tools_return_keeps_original_text_without_resuming_proposal",
+          "passed": true
+        },
+        {
+          "name": "source_choice_survives_tools_switch",
+          "passed": true
+        },
+        {
+          "name": "voice_input_opens_existing_review_flow",
+          "passed": true
+        },
+        {
+          "name": "leaving_workspace_closes_voice_input",
+          "passed": true
+        },
+        {
+          "name": "backend_loss_clears_picture_and_suggestion",
+          "passed": true
+        },
+        {
+          "name": "requests_only_use_qwen38_with_thinking_disabled",
+          "passed": true
+        },
+        {
+          "name": "renderer_has_no_errors",
+          "passed": true
         }
+      ],
+      "layout": {
+        "viewport": [
+          1440,
+          1024
+        ],
+        "document": [
+          1440,
+          1024
+        ],
+        "camera": 1022,
+        "workspace": 1376,
+        "assistantBottom": 945.5859375
       },
-      "svga": {
-        "width": 800,
-        "height": 600,
-        "jpeg_quantizer": 10,
-        "http_keepalive": true,
-        "frames": 77,
-        "elapsed_ms": 12062.0,
-        "busy_responses": 0,
-        "received_fps": 6.384,
-        "http_ms": {
-          "mean": 151.34,
-          "median": 146.88,
-          "p95": 241.03,
-          "max": 350.08
+      "mobile_layout": {
+        "viewport": [
+          390,
+          844
+        ],
+        "document": [
+          375,
+          1305
+        ],
+        "camera_width": 347,
+        "camera_height": 436.1953125,
+        "assistant_width": 347
+      },
+      "scope": "Real Electron/backend/IPC; local HTTP model fixture, synthetic loopback picture only; no company API/hardware/microphone/control"
+    },
+    "package": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "default_is_workbench_with_no_automatic_connection",
+          "passed": true
         },
-        "jpeg_bytes": {
-          "mean": 50258.86,
-          "median": 50202,
-          "p95": 50678,
-          "max": 50898
+        {
+          "name": "initial_camera_empty_and_model_has_no_startup_request",
+          "passed": true
         },
-        "wifi_restored": true
-      }
-    },
-    "sustained_vga": {
-      "width": 640,
-      "height": 480,
-      "frames": 398,
-      "elapsed_ms": 60047,
-      "received_fps": 6.628,
-      "errors": 0,
-      "error_details": [],
-      "busy_responses": 0,
-      "phase_after": "online",
-      "wifi_restored": true,
-      "request_ms": {
-        "mean": 144.24,
-        "median": 125.0,
-        "p95": 250,
-        "max": 500
-      },
-      "camera_wait_ms": {
-        "mean": 2.46,
-        "median": 1.28,
-        "p95": 11.07,
-        "max": 32.41
-      },
-      "jpeg_bytes": {
-        "mean": 27690.38,
-        "median": 27663.5,
-        "p95": 27929,
-        "max": 28121
-      },
-      "camera_failure_counter_delta": 0,
-      "same_camera_stream": true
-    },
-    "desktop": {
-      "dev": {
-        "passed": true,
-        "checks": 21,
-        "frames": 12,
-        "observed_metrics": "实际显示 6.5 FPS\n请求至显示 75 ms\nJPEG 27.4 KiB\n板端等帧 1 ms",
-        "one_fps": {
-          "seconds": 5.0161654,
-          "displayed_changes": 6
+        {
+          "name": "camera_is_primary_and_no_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "assistant_camera_and_results_share_desktop_view",
+          "passed": true
+        },
+        {
+          "name": "mobile_workbench_stacks_without_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "scenario_only_fills_source_without_request",
+          "passed": true
+        },
+        {
+          "name": "new_road_intent_and_exact_source_reach_right_panel",
+          "passed": true
+        },
+        {
+          "name": "proposal_sends_no_protocol_or_permission",
+          "passed": true
+        },
+        {
+          "name": "image_recognition_does_not_come_from_text_suggestion",
+          "passed": true
+        },
+        {
+          "name": "editing_clears_previous_proposal",
+          "passed": true
+        },
+        {
+          "name": "cash_intent_has_unknown_count_and_total",
+          "passed": true
+        },
+        {
+          "name": "late_model_result_does_not_replace_edited_source",
+          "passed": true
+        },
+        {
+          "name": "detailed_connection_and_controller_tools_still_work",
+          "passed": true
+        },
+        {
+          "name": "synthetic_picture_really_decodes_and_remains_labelled",
+          "passed": true
+        },
+        {
+          "name": "goto_B_is_not_automatically_money_counting",
+          "passed": true
+        },
+        {
+          "name": "tools_return_keeps_original_text_without_resuming_proposal",
+          "passed": true
+        },
+        {
+          "name": "source_choice_survives_tools_switch",
+          "passed": true
+        },
+        {
+          "name": "voice_input_opens_existing_review_flow",
+          "passed": true
+        },
+        {
+          "name": "leaving_workspace_closes_voice_input",
+          "passed": true
+        },
+        {
+          "name": "backend_loss_clears_picture_and_suggestion",
+          "passed": true
+        },
+        {
+          "name": "requests_only_use_qwen38_with_thinking_disabled",
+          "passed": true
+        },
+        {
+          "name": "renderer_has_no_errors",
+          "passed": true
         }
+      ],
+      "layout": {
+        "viewport": [
+          1440,
+          1024
+        ],
+        "document": [
+          1440,
+          1024
+        ],
+        "camera": 1022,
+        "workspace": 1376,
+        "assistantBottom": 945.5859375
       },
-      "package": {
-        "passed": true,
-        "checks": 21,
-        "frames": 12,
-        "observed_metrics": "实际显示 6.3 FPS\n请求至显示 117 ms\nJPEG 27.5 KiB\n板端等帧 16 ms",
-        "one_fps": {
-          "seconds": 5.006173199999999,
-          "displayed_changes": 6
-        }
-      }
-    },
-    "sensor_only_short_test": {
-      "frames": 20,
-      "timestamp_span_us": 855865,
-      "fps": 22.2,
-      "includes_wifi": false
-    },
-    "image_quality": {
-      "user_accepted_reference_sha256": "08eb1f16b1893b74a1e47272664d6f501e625a2f978224599f78103b244ec576",
-      "profile": "driver_normal_auto_white_balance",
-      "quantitative_optical_acceptance": false,
-      "analogue_gain_observed_x": 15.5,
-      "note": "User accepted one tissue-package reference. Later samples still show indoor noise and colour variation; no proof of phone-equivalent quality or stable recognition."
-    },
-    "hardware_control_allowed": false,
-    "stm32_connected": false,
-    "raw_evidence_sha256": {
-      "03_esp32_idf/evidence/hardware/20261016-image-quality/final2-015-qvga/report.json": "c06205d6d3ab03999a8f24b959248a4cf0ef80813708fe2230dde1bd681c29c2",
-      "03_esp32_idf/evidence/hardware/20261016-image-quality/final2-015-vga/report.json": "aa6d871727f1af048b72c87f5c0bd39048c43fd569a7f88881f0dc1c3eeab3ef",
-      "03_esp32_idf/evidence/hardware/20261016-image-quality/final2-015-svga/report.json": "953646453b8455e76cc18a5d7e80a79811060920ef0dc1bfe8be603cf96804cf",
-      "03_esp32_idf/evidence/hardware/20261016-image-quality/persistent-040-final2.json": "ab40b342a5a255806dc2ffd408f6a358609b739961d069e887ed86bd87d2a993",
-      "05_上位机/evidence/esp32-dev-live.json": "942dd52258a9849fefd06706c314e8227820f70838452990cdb9a8b2a3e56a54",
-      "05_上位机/evidence/esp32-package-live.json": "a2b248a2dfadd80736bfdd174a26ff07652543c7a406270522cd1f5c0d2d96f8",
-      "03_esp32_idf/evidence/hardware/20261016-image-quality/flash-image-final2.json": "1852d478e1b263b36e18d77afc7d707a0f2d43179653af494016348cf8c48523",
-      "03_esp32_idf/evidence/hardware/20261016-image-quality/boot-final2.log": "3e21f3adbf8ddf779954a39f3b0110b9639a11ede7b674a4fe07a2b64372cfd7"
+      "mobile_layout": {
+        "viewport": [
+          390,
+          844
+        ],
+        "document": [
+          375,
+          1305
+        ],
+        "camera_width": 347,
+        "camera_height": 436.1953125,
+        "assistant_width": 347
+      },
+      "scope": "Real Electron/backend/IPC; local HTTP model fixture, synthetic loopback picture only; no company API/hardware/microphone/control"
     }
   }
 }

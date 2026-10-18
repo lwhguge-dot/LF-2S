@@ -10,6 +10,7 @@ from lf2s_protocol.model import PHASE, REASON
 from lf2s_protocol.version import DIALECT_HASH, VERSION
 from lf2s_protocol.wire import ProtocolError, decode_datagram
 
+from service.controller import controller_snapshot
 from service.serialization import clean, message_json
 from service.tasks import TERMINAL, TaskService
 from service.version import APPLICATION_VERSION
@@ -18,6 +19,7 @@ from simulation.network import SCENARIOS, Simulation
 # Application simulation budgets, not signed production flight parameters.
 LINK_MAX_AGE_MS = 1000
 MEASUREMENT_MAX_AGE_MS = 300
+REBOOT_RECONNECT_REASON = "飞控已重启；旧会话失效，请断开后重新连接"
 
 
 class Adapter:
@@ -34,6 +36,7 @@ class Adapter:
         self.profile = None
         self.profile_at = None
         self.failure = None
+        self.reconnect_required = False
         self.operations = {}
         self.waiters = {}
         self.query_request = None
@@ -70,6 +73,7 @@ class Adapter:
         self.telemetry.clear()
         self.profile = self.profile_at = self.query_request = None
         self.failure = None
+        self.reconnect_required = False
         self.last_reject = None
         self.known_requests.clear()
 
@@ -92,6 +96,8 @@ class Adapter:
         # No configurable destination, generic sender or COMMAND_LONG bypass.
         if self.replaying:
             raise ProtocolError("回放通道只读，禁止发送协议请求")
+        if self.reconnect_required:
+            raise ProtocolError(REBOOT_RECONNECT_REASON)
         readonly = msg.get_msgId() == 60000 and msg.op in (1, 8)
         simulated = self.sim.task_bench and (
             (msg.get_msgId() == 60000 and msg.op in (2, 3, 4, 5, 6, 7))
@@ -199,13 +205,16 @@ class Adapter:
 
     def reject(self, reason):
         self.rejected += 1
-        self.failure = reason
+        self.failure = REBOOT_RECONNECT_REASON if self.reconnect_required else reason
         if self.last_reject != reason:
             self.journal.add("warning", reason)
             self.last_reject = reason
 
     def receive(self, raw, source):
         if not self.connected:
+            return
+        if self.reconnect_required:
+            self.reject(REBOOT_RECONNECT_REASON)
             return
         try:
             if source != self.sim.esp_address:
@@ -218,10 +227,13 @@ class Adapter:
                 if msg.dialect_hash != DIALECT_HASH:
                     raise ProtocolError("协议指纹不匹配，请检查两端协议版本")
                 if self.client.boot and msg.boot_id != self.client.boot:
+                    self.reconnect_required = True
+                    self.tasks.interrupt(REBOOT_RECONNECT_REASON)
                     self.client.pending.clear()
                     self.telemetry.clear()
                     self.profile = self.profile_at = None
-                    raise ProtocolError("飞控已重启；旧会话失效，请断开后重新连接")
+                    self.last_state = self.state_at = self.last_rx = None
+                    raise ProtocolError(REBOOT_RECONNECT_REASON)
                 if msg.sample_id <= self.client.sample:
                     return
             if mid == 60002:
@@ -234,11 +246,33 @@ class Adapter:
                 if req.op == 1 and msg.client_nonce != self.client.nonce:
                     if req.get_msgId() == 60000:
                         raise ProtocolError("HELLO 随机编号不匹配")
-                if req.get_msgId() == 60001 and (
-                    msg.task_id != req.task_id
-                    or (msg.lease_id != req.lease_id and req.op != 7)
-                ):
-                    raise ProtocolError("动作结果的任务或租期与原请求不匹配")
+                if req.get_msgId() == 60001:
+                    # CANCEL/FAILSAFE and failed END report their own final
+                    # result after revocation, so their current lease is zero.
+                    # Rejections can also follow an expired lease. These cases
+                    # must not admit another nonzero lease or a false completion.
+                    revoked_final = (
+                        msg.lease_id == 0
+                        and msg.event_id != 0
+                        and (
+                            (req.op in (7, 9) and msg.phase == 3 and msg.reason == 0)
+                            or (
+                                req.op == 8
+                                and req.outcome == 1
+                                and msg.phase == 7
+                                and msg.reason == 15
+                            )
+                        )
+                    )
+                    rejected_without_lease = msg.lease_id == 0 and msg.phase == 4
+                    if msg.task_id != req.task_id or (
+                        msg.lease_id != req.lease_id
+                        and not revoked_final
+                        and not rejected_without_lease
+                    ):
+                        raise ProtocolError("动作结果的任务或租期与原请求不匹配")
+                    if msg.phase in (3, 5, 6, 7) and msg.event_id == 0:
+                        raise ProtocolError("动作最终结果缺少事件编号")
             if mid == 60004:
                 if (
                     not self.client.session
@@ -267,7 +301,7 @@ class Adapter:
                 self.last_state, self.state_at = msg, now
                 # Failures requiring reconnection remain latched. Transient mismatches recover only
                 # when a valid current-context state actually arrives, never from arbitrary traffic.
-                if self.failure and "重启" not in self.failure:
+                if self.failure and not self.reconnect_required:
                     self.failure = None
                     self.last_reject = None
                 if now - self.last_state_log >= 1000:
@@ -476,7 +510,7 @@ class Adapter:
             "disconnected"
             if not self.connected
             else "blocked"
-            if self.failure
+            if self.failure or self.reconnect_required
             else "connecting"
             if state is None
             else "stale"
@@ -514,6 +548,7 @@ class Adapter:
             "link": {
                 "phase": phase,
                 "state_age_ms": age,
+                "reconnect_required": self.reconnect_required,
                 "max_age_ms": LINK_MAX_AGE_MS,
                 "reason": self.failure
                 or ("超过 1000 ms 未收到当前会话状态" if phase == "stale" else None),
@@ -546,6 +581,12 @@ class Adapter:
                 ),
                 "battery": self.sensor("battery", 4, None, voltage, self.state_at),
             },
+            "controller": controller_snapshot(
+                state,
+                available=phase == "online" and not self.replaying,
+                age_ms=age,
+                reason=self.failure or ("链路状态过期" if phase == "stale" else None),
+            ),
             "qualification": {
                 "configuration": "unsigned" if self.profile else "unknown",
                 "configuration_reason": "模拟配置未签认"

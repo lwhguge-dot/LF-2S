@@ -11,6 +11,9 @@ const online = computed(
 );
 const task = computed(() => props.state.task?.current);
 const running = computed(() => !!props.state.task?.running);
+const hardware = computed(
+  () => !!props.state.bench?.active || !!props.state.usb_fc?.active,
+);
 const steps = computed(() =>
   (props.state.operations || []).filter((o) =>
     task.value?.steps.includes(o.operation_id),
@@ -62,7 +65,7 @@ function prepare() {
     </ol>
     <div class="task-buttons">
       <button
-        :disabled="busy || !ready || !!state.replay || running"
+        :disabled="busy || !ready || !!state.replay || running || hardware"
         @click="prepare"
       >
         重置并准备模拟器
@@ -72,6 +75,7 @@ function prepare() {
           busy ||
           !ready ||
           !!state.replay ||
+          hardware ||
           state.link?.phase !== 'disconnected'
         "
         @click="act(bridge.connect)"

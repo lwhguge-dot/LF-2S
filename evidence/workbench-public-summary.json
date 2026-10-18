@@ -1,0 +1,248 @@
+{
+  "version": "0.8.0",
+  "scope": "Actual Electron/Python/IPC with local HTTP model fixture and synthetic picture;no hardware/company model acceptance",
+  "runs": {
+    "dev": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "default_is_workbench_with_no_automatic_connection",
+          "passed": true
+        },
+        {
+          "name": "initial_camera_empty_and_model_has_no_startup_request",
+          "passed": true
+        },
+        {
+          "name": "camera_is_primary_and_no_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "assistant_camera_and_results_share_desktop_view",
+          "passed": true
+        },
+        {
+          "name": "mobile_workbench_stacks_without_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "scenario_only_fills_source_without_request",
+          "passed": true
+        },
+        {
+          "name": "new_road_intent_and_exact_source_reach_right_panel",
+          "passed": true
+        },
+        {
+          "name": "proposal_sends_no_protocol_or_permission",
+          "passed": true
+        },
+        {
+          "name": "image_recognition_does_not_come_from_text_suggestion",
+          "passed": true
+        },
+        {
+          "name": "editing_clears_previous_proposal",
+          "passed": true
+        },
+        {
+          "name": "cash_intent_has_unknown_count_and_total",
+          "passed": true
+        },
+        {
+          "name": "late_model_result_does_not_replace_edited_source",
+          "passed": true
+        },
+        {
+          "name": "detailed_connection_and_controller_tools_still_work",
+          "passed": true
+        },
+        {
+          "name": "synthetic_picture_really_decodes_and_remains_labelled",
+          "passed": true
+        },
+        {
+          "name": "goto_B_is_not_automatically_money_counting",
+          "passed": true
+        },
+        {
+          "name": "tools_return_keeps_original_text_without_resuming_proposal",
+          "passed": true
+        },
+        {
+          "name": "source_choice_survives_tools_switch",
+          "passed": true
+        },
+        {
+          "name": "voice_input_opens_existing_review_flow",
+          "passed": true
+        },
+        {
+          "name": "leaving_workspace_closes_voice_input",
+          "passed": true
+        },
+        {
+          "name": "backend_loss_clears_picture_and_suggestion",
+          "passed": true
+        },
+        {
+          "name": "requests_only_use_qwen38_with_thinking_disabled",
+          "passed": true
+        },
+        {
+          "name": "renderer_has_no_errors",
+          "passed": true
+        }
+      ],
+      "layout": {
+        "viewport": [
+          1440,
+          1024
+        ],
+        "document": [
+          1440,
+          1024
+        ],
+        "camera": 1022,
+        "workspace": 1376,
+        "assistantBottom": 945.5859375
+      },
+      "mobile_layout": {
+        "viewport": [
+          390,
+          844
+        ],
+        "document": [
+          375,
+          1305
+        ],
+        "camera_width": 347,
+        "camera_height": 436.1953125,
+        "assistant_width": 347
+      },
+      "scope": "Real Electron/backend/IPC; local HTTP model fixture, synthetic loopback picture only; no company API/hardware/microphone/control"
+    },
+    "package": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "default_is_workbench_with_no_automatic_connection",
+          "passed": true
+        },
+        {
+          "name": "initial_camera_empty_and_model_has_no_startup_request",
+          "passed": true
+        },
+        {
+          "name": "camera_is_primary_and_no_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "assistant_camera_and_results_share_desktop_view",
+          "passed": true
+        },
+        {
+          "name": "mobile_workbench_stacks_without_horizontal_overflow",
+          "passed": true
+        },
+        {
+          "name": "scenario_only_fills_source_without_request",
+          "passed": true
+        },
+        {
+          "name": "new_road_intent_and_exact_source_reach_right_panel",
+          "passed": true
+        },
+        {
+          "name": "proposal_sends_no_protocol_or_permission",
+          "passed": true
+        },
+        {
+          "name": "image_recognition_does_not_come_from_text_suggestion",
+          "passed": true
+        },
+        {
+          "name": "editing_clears_previous_proposal",
+          "passed": true
+        },
+        {
+          "name": "cash_intent_has_unknown_count_and_total",
+          "passed": true
+        },
+        {
+          "name": "late_model_result_does_not_replace_edited_source",
+          "passed": true
+        },
+        {
+          "name": "detailed_connection_and_controller_tools_still_work",
+          "passed": true
+        },
+        {
+          "name": "synthetic_picture_really_decodes_and_remains_labelled",
+          "passed": true
+        },
+        {
+          "name": "goto_B_is_not_automatically_money_counting",
+          "passed": true
+        },
+        {
+          "name": "tools_return_keeps_original_text_without_resuming_proposal",
+          "passed": true
+        },
+        {
+          "name": "source_choice_survives_tools_switch",
+          "passed": true
+        },
+        {
+          "name": "voice_input_opens_existing_review_flow",
+          "passed": true
+        },
+        {
+          "name": "leaving_workspace_closes_voice_input",
+          "passed": true
+        },
+        {
+          "name": "backend_loss_clears_picture_and_suggestion",
+          "passed": true
+        },
+        {
+          "name": "requests_only_use_qwen38_with_thinking_disabled",
+          "passed": true
+        },
+        {
+          "name": "renderer_has_no_errors",
+          "passed": true
+        }
+      ],
+      "layout": {
+        "viewport": [
+          1440,
+          1024
+        ],
+        "document": [
+          1440,
+          1024
+        ],
+        "camera": 1022,
+        "workspace": 1376,
+        "assistantBottom": 945.5859375
+      },
+      "mobile_layout": {
+        "viewport": [
+          390,
+          844
+        ],
+        "document": [
+          375,
+          1305
+        ],
+        "camera_width": 347,
+        "camera_height": 436.1953125,
+        "assistant_width": 347
+      },
+      "scope": "Real Electron/backend/IPC; local HTTP model fixture, synthetic loopback picture only; no company API/hardware/microphone/control"
+    }
+  },
+  "image_recognition_or_flight_qualified": false,
+  "archive_result": "See the release verification.json for extracted-bundle checks"
+}

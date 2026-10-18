@@ -2,9 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { bridge, type RealCapture, type State } from "./bridge";
 
-const props = defineProps<{ state: State; serviceReady: boolean }>();
+const props = defineProps<{ state: State; serviceReady: boolean; embedded?: boolean }>();
 const emit = defineEmits<{ refresh: [state: State] }>();
-const host = ref("192.168.4.1");
+const host = ref("");
 const port = ref(80);
 const busy = ref(false);
 const reading = ref(false);
@@ -26,7 +26,17 @@ let epoch = 0;
 let alive = true;
 let timer: ReturnType<typeof setInterval>;
 const bench = computed(() => props.state.bench);
+watch(() => bench.value?.host, value => {
+  if (value && !host.value && !busy.value) host.value = value;
+}, {immediate:true});
 const health = computed(() => bench.value?.health);
+const networkText = computed(() =>
+  health.value?.wifi_mode === "sta"
+    ? "板卡连接电脑热点"
+    : health.value?.wifi_mode === "ap"
+      ? "板卡提供热点"
+      : "未报告",
+);
 const online = computed(
   () =>
     props.serviceReady &&
@@ -213,7 +223,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="bench-layout" data-testid="real-bench">
+  <section class="bench-layout" :class="{'bench-embedded':embedded}" data-testid="real-bench">
     <article class="panel bench-camera">
       <div class="panel-heading">
         <h2>OV5640 实物预览</h2>
@@ -231,7 +241,7 @@ onUnmounted(() => {
         <div v-else class="bench-placeholder" data-testid="real-image-empty">
           <strong>{{ imageURL ? "图像已过期" : "等待实物图像" }}</strong>
           <span>{{
-            bench?.reason || "先让电脑连接 ESP32 热点，再连接实物台架"
+            bench?.reason || "先确认两端 Wi-Fi 和板卡当前地址，再连接实物台架"
           }}</span>
         </div>
         <span class="image-watermark">实拍 · 未标定 · 不用于飞行控制</span>
@@ -346,12 +356,19 @@ onUnmounted(() => {
           <span class="chip">Wi-Fi</span>
         </div>
         <p class="bench-status" data-testid="bench-status">{{ status }}</p>
-        <p>电脑连接热点 LF2S-S3-81E5。USB 继续供电；本页通过热点读取图像。</p>
+        <p data-testid="bench-network-help">
+          测试时让 ESP32 连接电脑的 2.4 GHz 移动热点，电脑继续上网。
+          若上游是手机热点，也使用 2.4 GHz。USB 继续供电。
+        </p>
+        <p>
+          从电脑热点设备列表或板卡串口查看当前地址；热点重开后地址可能变化。
+        </p>
         <label
           >板卡 IPv4 地址<input
             v-model="host"
             :disabled="busy || bench?.active"
             maxlength="15"
+            placeholder="填写板卡实际 IPv4 地址"
             aria-label="ESP32 IPv4 地址"
         /></label>
         <label
@@ -395,6 +412,19 @@ onUnmounted(() => {
           <dd>{{ health?.firmware || "未知" }}</dd>
           <dt>协议</dt>
           <dd>{{ health?.protocol || "未知" }}</dd>
+          <dt>Wi-Fi 连接方式</dt>
+          <dd data-testid="wifi-mode">{{ networkText }}</dd>
+          <dt>板卡报告地址</dt>
+          <dd data-testid="wifi-ipv4">{{ health?.wifi_ipv4 || "未知" }}</dd>
+          <dt>Wi-Fi 信号 / 信道</dt>
+          <dd data-testid="wifi-signal">
+            {{
+              health?.wifi_rssi_dbm != null
+                ? `${health.wifi_rssi_dbm} dBm`
+                : "未知"
+            }}
+            / {{ health?.wifi_channel ?? "未知" }}
+          </dd>
           <dt>自动对焦</dt>
           <dd data-testid="focus-state">{{ focusText }}</dd>
           <dt>AF 原始状态</dt>
@@ -442,8 +472,8 @@ onUnmounted(() => {
       <article class="panel bench-boundary">
         <h2>飞控尚未接入</h2>
         <p>
-          高度、姿态、位置、电压：未知。STM32
-          到货后再核对接线和联调。当前飞行动作入口关闭。
+          高度、姿态、位置、电压：未知。相机页面不提供飞控测量； 真实 UART
+          和机载协议仍待联调。当前飞行动作入口关闭。
         </p>
       </article>
     </div>

@@ -22,6 +22,18 @@ let stopping = false,
   restarting = false,
   generation = 0;
 let serviceError = "本地服务正在启动";
+let microphoneUntil = 0;
+let voiceQueue = Promise.resolve();
+
+function voiceOperation(action) {
+  const owner = generation;
+  const pending = voiceQueue.then(() => {
+    if (owner !== generation) throw new Error("旧语音请求已失效");
+    return action();
+  });
+  voiceQueue = pending.catch(() => {});
+  return pending;
+}
 
 function desktopLog(text) {
   const folder = path.join(userData, "logs");
@@ -71,7 +83,12 @@ function validate(event) {
 async function request(route, method = "GET", body, binary = false) {
   if (!base || serviceError) throw new Error(serviceError || "本地服务未就绪");
   // Native loopback HTTP bypasses machine/Chromium proxy configuration. No configurable destination.
-  const payload = body ? Buffer.from(JSON.stringify(body)) : undefined;
+  const rawAudio = Buffer.isBuffer(body);
+  const payload = body
+    ? rawAudio
+      ? body
+      : Buffer.from(JSON.stringify(body))
+    : undefined;
   const response = await new Promise((resolve, reject) => {
     const req = http.request(
       {
@@ -83,7 +100,7 @@ async function request(route, method = "GET", body, binary = false) {
           Authorization: `Bearer ${token}`,
           ...(payload
             ? {
-                "Content-Type": "application/json",
+                "Content-Type": rawAudio ? "audio/wav" : "application/json",
                 "Content-Length": payload.length,
               }
             : {}),
@@ -111,7 +128,11 @@ async function request(route, method = "GET", body, binary = false) {
       },
     );
     req.setTimeout(
-      binary === "real" || route.startsWith("bench/") ? 12000 : 4000,
+      binary === "real" ||
+        route.startsWith("bench/") ||
+        route.startsWith("fc-usb/")
+        ? 12000
+        : 4000,
       () => req.destroy(new Error("本地服务请求超时")),
     );
     req.on("error", reject);
@@ -205,6 +226,7 @@ async function request(route, method = "GET", body, binary = false) {
 }
 
 async function startWorker() {
+  microphoneUntil = 0;
   const myGeneration = ++generation;
   serviceError = "本地服务正在启动";
   base = undefined;
@@ -325,9 +347,28 @@ async function stopWorker() {
 async function boot() {
   fs.mkdirSync(userData, { recursive: true });
   session.defaultSession.setPermissionRequestHandler(
-    (_contents, _permission, callback) => callback(false),
+    (contents, permission, callback, details) =>
+      callback(
+        contents === win?.webContents &&
+          contents.getURL() === pageURL &&
+          permission === "media" &&
+          details.isMainFrame === true &&
+          details.requestingUrl === pageURL &&
+          details.mediaTypes?.length === 1 &&
+          details.mediaTypes[0] === "audio" &&
+          Date.now() < microphoneUntil,
+      ),
   );
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionCheckHandler(
+    (contents, permission, _origin, details) =>
+      contents === win?.webContents &&
+      contents.getURL() === pageURL &&
+      permission === "media" &&
+      details.isMainFrame === true &&
+      details.requestingUrl === pageURL &&
+      details.mediaType === "audio" &&
+      Date.now() < microphoneUntil,
+  );
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
     const allowed =
       details.url.startsWith("file:") ||
@@ -340,8 +381,8 @@ async function boot() {
     height: 980,
     minWidth: 700,
     minHeight: 650,
-    title: "LF-2S 上位机 · ESP32 台架与模拟",
-    backgroundColor: "#0b141c",
+    title: "LF-2S 视觉任务工作台",
+    backgroundColor: "#f5f7f9",
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -399,12 +440,46 @@ async function boot() {
     if (confirmed !== true) throw new Error("本次模拟许可尚未确认");
     return request("tasks/start", "POST", { confirmed: true });
   });
+  ipcMain.handle("station:textParse", (event, text) => {
+    validate(event);
+    if (typeof text !== "string" || !text.trim() || text.length > 512)
+      throw new Error("请输入 1～512 字的任务原文");
+    return request("text-tasks/parse", "POST", { text });
+  });
+  ipcMain.handle("station:textClear", (event) => {
+    validate(event);
+    return request("text-tasks/clear", "POST");
+  });
+  ipcMain.handle("station:microphone", (event, enabled) => {
+    validate(event);
+    if (typeof enabled !== "boolean") throw new Error("录音请求无效");
+    if (enabled && (!currentState().service_ready || currentState().replay))
+      throw new Error("请在实时页面和本地服务就绪后录音");
+    microphoneUntil = enabled ? Date.now() + 20000 : 0;
+  });
+  ipcMain.handle("station:voiceTranscribe", (event, audio) => {
+    validate(event);
+    if (
+      !(audio instanceof ArrayBuffer) ||
+      audio.byteLength < 44 ||
+      audio.byteLength > 500000
+    )
+      throw new Error("音频大小或格式无效");
+    return voiceOperation(() =>
+      request("voice/transcribe", "POST", Buffer.from(audio)),
+    );
+  });
+  ipcMain.handle("station:voiceClear", (event) => {
+    validate(event);
+    microphoneUntil = 0;
+    return voiceOperation(() => request("voice/clear", "POST"));
+  });
   ipcMain.handle("station:recordings", (event) => {
     validate(event);
     return request("recordings");
   });
   for (const name of ["replayOpen", "replaySeek"]) {
-    ipcMain.handle(`station:${name}`, (event, id, index = 0) => {
+    ipcMain.handle(`station:${name}`, async (event, id, index = 0) => {
       validate(event);
       if (
         typeof id !== "string" ||
@@ -414,6 +489,10 @@ async function boot() {
         index > 100000
       )
         throw new Error("回放编号或帧无效");
+      if (name === "replayOpen") {
+        microphoneUntil = 0;
+        await voiceOperation(() => request("voice/clear", "POST"));
+      }
       return request(
         name === "replayOpen" ? "replay/open" : "replay/seek",
         "POST",
@@ -441,6 +520,8 @@ async function boot() {
   for (const [name, route] of [
     ["benchDisconnect", "bench/disconnect"],
     ["benchFocus", "bench/focus"],
+    ["fcUsbConnect", "fc-usb/connect"],
+    ["fcUsbDisconnect", "fc-usb/disconnect"],
   ]) {
     ipcMain.handle(`station:${name}`, (event) => {
       validate(event);

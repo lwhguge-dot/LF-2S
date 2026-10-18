@@ -123,6 +123,12 @@ async function verifyS2({
       BigInt(taskSession) > BigInt(Number.MAX_SAFE_INTEGER),
   );
   const lastIndex = replayState.replay.index;
+  check(
+    "live_controller_diagnostics_do_not_reuse_historical_replay_state",
+    replayState.controller.available === false &&
+      replayState.controller.mode_code === null &&
+      replayState.replay.state.controller?.available === true,
+  );
   await button("上一帧").click();
   await eventually(
     async () => (await state(page)).replay.index === lastIndex - 1,
@@ -151,6 +157,56 @@ async function verifyS2({
   await prepare();
   await start();
   await nav("监控总览");
+  await scenario(page, "unknown");
+  await eventually(
+    async () => (await state(page)).controller.mode_name === "FAULT",
+    "sensor loss did not produce a current fault report",
+  );
+  await page
+    .getByTestId("controller-mode")
+    .filter({ hasText: "故障" })
+    .waitFor();
+  check(
+    "current_fault_reason_and_revoked_permission_are_visible_in_actual_renderer",
+    (await state(page)).controller.failsafe_reason_name === "SENSOR" &&
+      (await page.getByTestId("controller-reason").textContent()).includes(
+        "传感器数据条件未满足",
+      ) &&
+      (await page.getByTestId("controller-preflight").textContent()).includes(
+        "未满足",
+      ) &&
+      (await page.getByTestId("controller-lease-task").textContent()).includes(
+        "无 / 无",
+      ) &&
+      (await state(page)).hardware_control_allowed === false,
+  );
+  await page.screenshot({
+    path: path.join(output, suffix + "-controller-fault.png"),
+    fullPage: true,
+  });
+  await scenario(page, "link_pause");
+  await eventually(
+    async () => (await state(page)).link.phase === "stale",
+    "fault state did not expire",
+  );
+  await page
+    .getByTestId("controller-mode")
+    .filter({ hasText: "未知" })
+    .waitFor();
+  check(
+    "expired_fault_diagnostics_are_cleared_in_actual_renderer",
+    (await state(page)).controller.available === false &&
+      (await page.getByTestId("controller-reason").textContent()).includes(
+        "未知",
+      ) &&
+      (await page.getByTestId("controller-lease-task").textContent()).includes(
+        "未知 / 未知",
+      ),
+  );
+
+  await prepare();
+  await start();
+  await nav("监控总览");
   await scenario(page, "manual_takeover");
   await eventually(
     async () => !(await state(page)).task.running,
@@ -159,6 +215,18 @@ async function verifyS2({
   check(
     "manual_input_latches_before_reconnect",
     (await state(page)).qualification.manual_latched === true,
+  );
+  await page
+    .getByTestId("controller-manual")
+    .filter({ hasText: "已锁存" })
+    .waitFor();
+  check(
+    "current_manual_latch_is_visible_without_creating_control_permission",
+    (await page.getByTestId("controller-mode").textContent()).includes(
+      "人工",
+    ) &&
+      (await state(page)).controller.manual_latched === true &&
+      (await state(page)).qualification.control_allowed === false,
   );
   await button("断开").click();
   const priorHello = (await state(page)).operations
@@ -197,7 +265,8 @@ async function verifyS2({
     "restart_during_task_cannot_restore_old_actions",
     !finalState.task.running &&
       finalState.task.current === null &&
-      finalState.link.phase === "disconnected",
+      finalState.link.phase === "disconnected" &&
+      finalState.controller.available === false,
   );
   return finalState.service_pid;
 }

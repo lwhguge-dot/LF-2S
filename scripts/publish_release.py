@@ -183,6 +183,7 @@ def main():
         raise RuntimeError(
             "Existing draft targets another commit; review it before retrying"
         )
+    verified_assets = []
     for item in assets:
         current = next(
             (asset for asset in release["assets"] if asset["name"] == item.name), None
@@ -215,6 +216,14 @@ def main():
             json.dumps({"asset": item.name, "sha256": expected, "verified": True}),
             flush=True,
         )
+        verified_assets.append(
+            {
+                "name": item.name,
+                "size": current["size"],
+                "sha256": expected.removeprefix("sha256:"),
+                "download_url": current["browser_download_url"],
+            }
+        )
     release = request(
         f"{API}/releases/{release['id']}",
         "PATCH",
@@ -226,17 +235,18 @@ def main():
             "make_latest": "false",
         },
     )
-    print(
-        json.dumps(
-            {
-                "published": not release["draft"],
-                "prerelease": release["prerelease"],
-                "url": release["html_url"],
-                "tag": tag,
-            },
-            ensure_ascii=False,
-        )
+    record = {
+        "published": not release["draft"],
+        "prerelease": release["prerelease"],
+        "url": release["html_url"],
+        "tag": tag,
+        "commit": commit,
+        "assets": verified_assets,
+    }
+    (ROOT / "release" / f"published-{tag}.json").write_text(
+        json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
+    print(json.dumps(record, ensure_ascii=False))
 
 
 if __name__ == "__main__":

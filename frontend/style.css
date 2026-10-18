@@ -1,17 +1,28 @@
 :root {
   font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-  color: #dce8ee;
-  background: #0c151d;
+  color: #23343f;
+  background: #f5f7f9;
   font-size: 13px;
   line-height: 1.6;
   font-synthesis: none;
-  color-scheme: dark;
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
+}
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 button,
 input,
@@ -20,10 +31,10 @@ select {
 }
 button,
 select {
-  border: 1px solid #31424d;
+  border: 1px solid #dbe3e8;
   border-radius: 6px;
-  background: #1c2a35;
-  color: #d8e5ea;
+  background: #f7f9fa;
+  color: #344d5c;
   min-height: 34px;
   padding: 6px 12px;
 }
@@ -34,7 +45,7 @@ button {
     border-color 0.15s;
 }
 button:hover:enabled {
-  background: #2a3e4c;
+  background: #edf4f6;
   border-color: #6b8b9d;
 }
 button:disabled {
@@ -44,17 +55,17 @@ button:disabled {
 button:focus-visible,
 select:focus-visible,
 input:focus-visible {
-  outline: 2px solid #73dec7;
+  outline: 2px solid #087e83;
   outline-offset: 3px;
 }
 button.primary {
-  background: #8ce4cd;
-  border-color: #8ce4cd;
-  color: #102b2c;
+  background: #087e83;
+  border-color: #087e83;
+  color: #eef8f7;
   font-weight: 650;
 }
 button.primary:hover:enabled {
-  background: #afeedc;
+  background: #087e83;
 }
 h1,
 h2,
@@ -77,7 +88,7 @@ h3 {
   margin: 22px 0 12px;
 }
 p {
-  color: #92a6b5;
+  color: #617985;
 }
 .shell {
   display: flex;
@@ -88,8 +99,8 @@ p {
   flex-shrink: 0;
   position: fixed;
   inset: 0 auto 0 0;
-  background: #101c26;
-  border-right: 1px solid #23313d;
+  background: #ffffff;
+  border-right: 1px solid #e3e9ed;
   display: flex;
   flex-direction: column;
   padding: 30px 18px;
@@ -105,14 +116,14 @@ p {
 }
 .brand small {
   display: block;
-  color: #8ba1b2;
+  color: #6d828e;
   font-size: 10px;
   font-weight: 400;
   letter-spacing: 2px;
   margin-top: 7px;
 }
 .brand-mark {
-  color: #8ce4cd;
+  color: #087e83;
   font-size: 39px;
 }
 .rail-label {
@@ -129,16 +140,16 @@ p {
   border: 1px solid transparent;
   background: transparent;
   text-align: left;
-  color: #93a9ba;
+  color: #667d8b;
   padding: 10px 12px;
   display: flex;
   gap: 12px;
   align-items: center;
 }
 .rail nav button.selected {
-  background: #1e343c;
-  border-color: #35525a;
-  color: #a7ecd9;
+  background: #eef6f7;
+  border-color: #c6dce1;
+  color: #087e83;
 }
 .nav-icon {
   font-size: 20px;
@@ -150,7 +161,7 @@ p {
 }
 .edition {
   font-size: 11px;
-  color: #afbdc8;
+  color: #5f7684;
 }
 .rail-bottom p {
   font-size: 11px;
@@ -159,7 +170,7 @@ p {
 }
 .readonly-dot {
   font-size: 11px;
-  color: #a2b8bc;
+  color: #657f89;
 }
 .readonly-dot:before {
   content: "";
@@ -248,7 +259,7 @@ main {
   min-width: 0;
 }
 .panel {
-  border: 1px solid #293a47;
+  border: 1px solid #e3e9ed;
   border-radius: 9px;
   background: #131f29;
   overflow: hidden;
@@ -292,7 +303,7 @@ main {
   aspect-ratio: 16/9;
   position: relative;
   overflow: hidden;
-  background: #0c1821;
+  background: #f7f9fb;
 }
 .image-stage img {
   width: 100%;
@@ -392,7 +403,7 @@ main {
   white-space: nowrap;
 }
 .check input {
-  accent-color: #8ce4cd;
+  accent-color: #087e83;
 }
 .metrics {
   display: grid;
@@ -572,7 +583,7 @@ main {
   gap: 8px;
   margin: 0 18px;
   padding-top: 13px;
-  border-top: 1px solid #293a47;
+  border-top: 1px solid #e3e9ed;
   font-size: 10px;
 }
 .compact-list dt {
@@ -703,7 +714,7 @@ main {
 pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  background: #0c1821;
+  background: #f7f9fb;
   border: 1px solid #243743;
   border-radius: 6px;
   padding: 15px;
@@ -734,7 +745,7 @@ pre {
   overflow: auto;
 }
 .event-row {
-  border-top: 1px solid #293a47;
+  border-top: 1px solid #e3e9ed;
   padding: 10px 0;
   font-size: 11px;
 }
@@ -986,7 +997,7 @@ footer {
   margin: 24px 0;
   padding: 20px;
   background: #0b1720;
-  border: 1px solid #29424d;
+  border: 1px solid #cddfe2;
   border-radius: 12px;
   overflow-wrap: anywhere;
 }
@@ -997,7 +1008,7 @@ footer {
   display: grid;
   grid-template-columns: 1fr 0.7fr 1fr 1fr;
   gap: 12px;
-  border-bottom: 1px solid #29424d;
+  border-bottom: 1px solid #cddfe2;
   padding: 14px 0;
   overflow-wrap: anywhere;
 }
@@ -1009,7 +1020,7 @@ footer {
 }
 .replay-measures article {
   padding: 18px;
-  border: 1px solid #29424d;
+  border: 1px solid #cddfe2;
   border-radius: 12px;
 }
 #replay-position {
@@ -1021,4 +1032,36 @@ footer {
   .operation-table > div {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* Bright equipment views share the approved workbench surface. */
+.station-frame .side-rail,
+.station-frame .panel,
+.station-frame .main-header {
+  background: #fff;
+  color: #23343f;
+  border-color: #e3e9ed;
+}
+.station-frame .app-shell {
+  background: #f5f7f9;
+}
+.station-frame .metric-value {
+  color: #23343f;
+}
+.station-frame .identity-list dd {
+  color: #344d5c;
+}
+.station-frame textarea {
+  color: #2d4552;
+  background: #fbfcfd;
+  border-color: #dbe3e8;
+}
+.station-frame pre {
+  background: #f6f9fa;
+  color: #355160;
+  border-color: #e3e9ed;
+}
+.station-frame .sidebar nav button.selected {
+  background: #eef8f7;
+  color: #087e83;
 }

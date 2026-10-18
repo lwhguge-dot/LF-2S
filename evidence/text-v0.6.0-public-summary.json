@@ -1,0 +1,192 @@
+{
+  "version": "0.6.0",
+  "scope": "Actual company API text suggestions through Electron; no ASR, permission or control",
+  "runs": {
+    "dev": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "configured_non_thinking_no_startup_request",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_0",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_0",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_1",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_1",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_2",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_2",
+          "passed": true
+        },
+        {
+          "name": "exact_original_units_visible",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_3",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_3",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_4",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_4",
+          "passed": true
+        },
+        {
+          "name": "editing_hides_previous_suggestion",
+          "passed": true
+        },
+        {
+          "name": "cancel_does_not_restore_late_result",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "thinking_enabled": false,
+      "cases": [
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1688
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 938
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 875
+        }
+      ]
+    },
+    "package": {
+      "passed": true,
+      "checks": [
+        {
+          "name": "configured_non_thinking_no_startup_request",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_0",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_0",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_1",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_1",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_2",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_2",
+          "passed": true
+        },
+        {
+          "name": "exact_original_units_visible",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_3",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_3",
+          "passed": true
+        },
+        {
+          "name": "source_and_phase_4",
+          "passed": true
+        },
+        {
+          "name": "no_permission_or_wire_side_effect_4",
+          "passed": true
+        },
+        {
+          "name": "editing_hides_previous_suggestion",
+          "passed": true
+        },
+        {
+          "name": "cancel_does_not_restore_late_result",
+          "passed": true
+        },
+        {
+          "name": "no_renderer_errors",
+          "passed": true
+        }
+      ],
+      "thinking_enabled": false,
+      "cases": [
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "clarify",
+          "provider": "local_validation",
+          "elapsed_ms": 0
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1063
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 953
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 859
+        }
+      ]
+    }
+  }
+}

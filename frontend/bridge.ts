@@ -30,9 +30,13 @@ export interface Operation {
   protocol_phase?: string;
 }
 export interface State {
+  controller?: ControllerStatus;
   simulation: boolean;
-  mode?: "simulation" | "esp32_bench" | "replay";
+  mode?: "simulation" | "esp32_bench" | "hardware_bench" | "replay";
   bench?: Bench;
+  usb_fc?: FcUsb;
+  text_tasks?: TextTasks;
+  voice?: Voice;
   read_only: boolean;
   hardware_control_allowed?: false;
   task_fixture?: boolean;
@@ -85,6 +89,23 @@ export interface State {
     rejected: number;
     log_dropped: number;
   };
+}
+export interface ControllerStatus {
+  available: boolean;
+  source: "mavlink_control_state" | "unavailable";
+  state_age_ms: number | null;
+  reason: string | null;
+  mode_code: number | null;
+  mode_name: string | null;
+  failsafe_reason_code: number | null;
+  failsafe_reason_name: string | null;
+  owner_system: number | null;
+  owner_component: number | null;
+  route: number | null;
+  preflight: boolean | null;
+  manual_latched: boolean | null;
+  lease_id: number | null;
+  active_task: number | null;
 }
 export interface Capture {
   bytes: Uint8Array;
@@ -141,6 +162,12 @@ export interface Bench {
     udp_received: number;
     udp_validated: number;
     udp_rejected: number;
+    wifi_mode: "ap" | "sta" | null;
+    wifi_ipv4: string | null;
+    wifi_peer: boolean | null;
+    network_epoch: number | null;
+    wifi_rssi_dbm: number | null;
+    wifi_channel: number | null;
     preview_colour?: number | null;
     test_pattern?: boolean | null;
     sensor_bench_frames?: number | null;
@@ -180,6 +207,59 @@ export interface RealCapture {
   decode_ms: number;
   camera_wait_ms: number | null;
 }
+export interface UsbMeasurement {
+  available: boolean;
+  received_age_ms: number | null;
+  sample_age_ms: null;
+  measurement_qualified: false;
+  value: Record<string, number | number[]> | null;
+}
+export interface FcUsb {
+  active: boolean;
+  phase: "disconnected" | "connecting" | "online" | "stale" | "error";
+  reason: string | null;
+  epoch: number;
+  source: "vendor_usb_hid";
+  display_only: true;
+  hardware_control_allowed: false;
+  hardware_freshness_qualified: false;
+  mavlink_session_established: false;
+  receive_age_ms: number | null;
+  device: {
+    product: string;
+    manufacturer: string | null;
+    vid: number;
+    pid: number;
+    device_revision: number;
+  } | null;
+  attitude: UsbMeasurement;
+  imu_raw: UsbMeasurement;
+  rc_raw: UsbMeasurement;
+  status_raw: UsbMeasurement;
+  receiver_link_valid: null;
+  battery_v: null;
+  height_m: null;
+  position_m: null;
+  firmware_version: null;
+  mcu_model: null;
+  boot_id: null;
+  session_id: null;
+  history: {
+    elapsed_s: number;
+    roll_deg: number;
+    pitch_deg: number;
+    yaw_deg: number;
+  }[];
+  counters: Record<string, number>;
+  frames_by_function: Record<string, number>;
+  raw_log: {
+    enabled: boolean;
+    dropped: number;
+    error: string | null;
+    max_file_bytes: number;
+    backup_files: number;
+  };
+}
 export interface Recording {
   id: string;
   started?: string;
@@ -189,6 +269,76 @@ export interface Recording {
   truncated?: boolean;
   error?: string | null;
   complete: boolean;
+}
+export interface Voice {
+  configured: boolean;
+  configuration_error: string | null;
+  language: "zh";
+  spoken_language: string;
+  running: boolean;
+  timeout_ms: number;
+  max_seconds: number;
+  transcript_approved: false;
+  permission_granted: false;
+  hardware_control_allowed: false;
+  current: {
+    id: string;
+    audio_sha256: string;
+    duration_ms: number;
+    phase: "pending" | "review" | "empty" | "error";
+    transcript: string | null;
+    processing_ms: number | null;
+    elapsed_ms: number | null;
+    error: string | null;
+  } | null;
+}
+export interface TextTasks {
+  configured: boolean;
+  configuration_error: string | null;
+  model: string | null;
+  thinking_enabled: false;
+  running: boolean;
+  executable: false;
+  permission_granted: false;
+  hardware_control_allowed: false;
+  timeout_ms: number;
+  current: {
+    id: string;
+    epoch: number;
+    source_text: string;
+    source_sha256: string;
+    phase: "pending" | "review" | "clarify" | "rejected" | "error";
+    provider: "company_model" | "local_validation";
+    elapsed_ms: number | null;
+    result: {
+      status: string;
+      proposal: {
+        intent: string;
+        height_m: number | null;
+        hold_s: number | null;
+        target: string | null;
+        clarification: string | null;
+        requires_confirmation: boolean;
+      } | null;
+      errors: string[];
+      questions: string[];
+      source_evidence: {
+        field: string;
+        quote: string;
+        start: number;
+        end: number;
+        value: number | string;
+      }[];
+      executable: false;
+      permission_granted: false;
+    } | null;
+  } | null;
+}
+export interface TaskPresentation {
+  current: TextTasks["current"];
+  status: string;
+  source: string;
+  error: string;
 }
 export interface ReplayFrame {
   recording_id: string;
@@ -216,6 +366,13 @@ export interface DesktopBridge {
   image(): Promise<Capture>;
   benchConnect(host: string, port: number): Promise<Bench>;
   benchDisconnect(): Promise<Bench>;
+  fcUsbConnect(): Promise<FcUsb>;
+  fcUsbDisconnect(): Promise<FcUsb>;
+  textParse(text: string): Promise<TextTasks>;
+  textClear(): Promise<TextTasks>;
+  microphone(enabled: boolean): Promise<void>;
+  voiceTranscribe(audio: ArrayBuffer): Promise<Voice>;
+  voiceClear(): Promise<Voice>;
   benchFocus(): Promise<{ accepted: boolean; focused: false }>;
   benchPreview(): Promise<RealCapture>;
   benchSettings(

@@ -49,15 +49,17 @@ try {
     if ($Task -eq 'check') {
         Invoke-Checked $appPython @('-m','ruff','check','service','simulation','scripts','tests')
         Invoke-Checked $appPython @('-B','scripts\sync_protocol.py','--check')
-        Invoke-Checked $appPython @('-m','pytest','tests\test_backend.py','tests\test_esp32.py','-q','--junitxml=evidence\backend-junit.xml')
+        Invoke-Checked $appPython @('-m','pytest','tests\test_backend.py','tests\test_esp32.py','tests\test_fc_usb.py','tests\test_text_tasks.py','tests\test_demo_intents.py','tests\test_voice.py','tests\test_reboot_latch.py','tests\test_controller.py','-q','--junitxml=evidence\backend-junit.xml')
         Invoke-Checked 'npm.cmd' @('run','check:desktop')
         Invoke-Checked 'npm.cmd' @('run','build')
         Invoke-Checked 'npm.cmd' @('run','verify:desktop')
+        Invoke-Checked 'node' @('tests/workbench_desktop.cjs')
         Assert-Cleanup
         return
     }
     if ($Task -eq 'verify-package') {
         Invoke-Checked 'npm.cmd' @('run','verify:package')
+        Invoke-Checked 'node' @('tests/workbench_desktop.cjs','--packaged')
         Assert-Cleanup
         return
     }
