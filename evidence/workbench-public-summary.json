@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "scope": "Actual Electron/Python/IPC with local HTTP model fixture and synthetic picture;no hardware/company model acceptance",
   "runs": {
     "dev": {

@@ -369,7 +369,13 @@ async function main() {
       path: path.join(output, suffix + "-logs.png"),
       fullPage: true,
     });
-    await page.getByRole("button", { name: "后续路线", exact: false }).click();
+    await page.setViewportSize({ width: 1440, height: 720 });
+    const roadmap = page.getByRole("button", {
+      name: "后续路线",
+      exact: false,
+    });
+    await roadmap.scrollIntoViewIfNeeded();
+    await roadmap.click();
     check(
       "future_s2_s5_retained_and_pending",
       (await page.locator(".roadmap").textContent()).includes("Mind+") &&

@@ -1,5 +1,5 @@
 {
-  "application_version": "0.8.0",
+  "application_version": "0.8.1",
   "scope": "Physical vendor USB input and display; no UART or control qualification",
   "runs": {}
 }

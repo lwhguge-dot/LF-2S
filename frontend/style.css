@@ -135,6 +135,9 @@ p {
 .rail nav {
   display: grid;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .rail nav button {
   border: 1px solid transparent;

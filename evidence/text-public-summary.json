@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "scope": "Actual company API text suggestions through Electron; no ASR, permission or control",
   "runs": {
     "dev": {
@@ -105,12 +105,17 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 2360
+          "elapsed_ms": 3157
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1906
+          "elapsed_ms": 3000
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1797
         },
         {
           "phase": "review",
@@ -120,17 +125,12 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1828
+          "elapsed_ms": 1750
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1953
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1625
+          "elapsed_ms": 1563
         }
       ]
     },
@@ -237,17 +237,12 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 2375
+          "elapsed_ms": 3078
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1766
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1797
+          "elapsed_ms": 1859
         },
         {
           "phase": "review",
@@ -257,12 +252,17 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1500
+          "elapsed_ms": 1953
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 2657
+          "elapsed_ms": 1656
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1687
         }
       ]
     }

@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "scope": "synthetic tasks/replay, vendor FC USB input and ESP32 display benches; no UART/control, optical timing or flight acceptance",
   "backend": {
     "tests": 272,
@@ -45,7 +45,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "16292826286628422751"
+        "client_nonce": "17089046653091338228"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -222,7 +222,7 @@
         "name": "u64_survives_wire_http_ipc_vue_dom",
         "passed": true,
         "session_id": "17375808096009453569",
-        "client_nonce": "10390469989627670219"
+        "client_nonce": "10641956660673048235"
       },
       {
         "name": "narrow_bridge_and_sandbox",
@@ -511,12 +511,17 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 2360
+          "elapsed_ms": 3157
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1906
+          "elapsed_ms": 3000
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1797
         },
         {
           "phase": "review",
@@ -526,17 +531,12 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1828
+          "elapsed_ms": 1750
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1953
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1625
+          "elapsed_ms": 1563
         }
       ]
     },
@@ -643,17 +643,12 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 2375
+          "elapsed_ms": 3078
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1766
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1797
+          "elapsed_ms": 1859
         },
         {
           "phase": "review",
@@ -663,12 +658,17 @@
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 1500
+          "elapsed_ms": 1953
         },
         {
           "phase": "review",
           "provider": "company_model",
-          "elapsed_ms": 2657
+          "elapsed_ms": 1656
+        },
+        {
+          "phase": "review",
+          "provider": "company_model",
+          "elapsed_ms": 1687
         }
       ]
     }
@@ -766,8 +766,8 @@
         "input": "upstream test_wavs/zh.wav",
         "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
         "duration_ms": 5592,
-        "elapsed_ms": 125,
-        "processing_ms": 119.7,
+        "elapsed_ms": 266,
+        "processing_ms": 176.42,
         "transcript": "开饭时间早上9点至下午5点。",
         "independent_truth_available": false
       },
@@ -775,7 +775,7 @@
         "user_corrected_source": true,
         "company_model": true,
         "original_reference_is_not_a_flight_command": true,
-        "elapsed_ms": 2578,
+        "elapsed_ms": 2343,
         "phase": "review",
         "thinking_enabled": false
       },
@@ -873,8 +873,8 @@
         "input": "upstream test_wavs/zh.wav",
         "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
         "duration_ms": 5592,
-        "elapsed_ms": 281,
-        "processing_ms": 240.18,
+        "elapsed_ms": 219,
+        "processing_ms": 147.82,
         "transcript": "开饭时间早上9点至下午5点。",
         "independent_truth_available": false
       },
@@ -882,7 +882,7 @@
         "user_corrected_source": true,
         "company_model": true,
         "original_reference_is_not_a_flight_command": true,
-        "elapsed_ms": 2812,
+        "elapsed_ms": 2235,
         "phase": "review",
         "thinking_enabled": false
       },
@@ -894,7 +894,7 @@
   "preview_stability": null,
   "preview_performance": null,
   "controller_protocol_diagnostics": {
-    "application_version": "0.8.0",
+    "application_version": "0.8.1",
     "scope": "Current protocol report display; saved85C byte ingress and real Electron simulation UI, no physical UART/control",
     "backend_regressions": 14,
     "saved_C_scenarios": 2,
@@ -918,10 +918,10 @@
       "frontend/App.vue": "9505561795e8ea9cb2b0c526ec9d8563884c2f6de19a51a9686f52c30cfad87b",
       "frontend/bridge.ts": "3563cc361a0bed33867450ca0dc1555bbaa73b8031995fd56a23e03801763421",
       "tests/test_controller.py": "bba127d8926e7e9b1c73e408d4a8be9b2ac26a53e953b22e1c4a2e9028f3627b",
-      "tests/desktop.cjs": "2ec90f50fb9fe10bed8bd59996a1f9222e293298a20f6c0c1eba9a9f9348de68",
+      "tests/desktop.cjs": "76b64ec5d15ae7375eb32178edb658086580066cca9c28faaeecc83a379f3f63",
       "tests/s2_desktop.cjs": "ec64ad37a70986926f21fa362a9d4c05893fade3c433a13da307b9052921e548",
       "tests/fixtures/fc-estimator-fault-arm.json": "04dbef20a6602b9ab366bb271a2b5b8007f23d1181e24d1847043cb943a69670",
-      "package.json": "f04ec27c457a8246072d783f5472087d07adb2f95de585df8c04494b7705ec65"
+      "package.json": "5656919eec046f30f291b2767698f6aba817ebf2220be0aba70c2780875b755e"
     }
   },
   "visual_task_workbench": {

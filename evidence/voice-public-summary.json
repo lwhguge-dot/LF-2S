@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "scope": "Chromium fake microphone and WAV review; local CPU reference ASR and optional company model on manually corrected text; no company ASR deployment, human Mandarin accuracy or flight acceptance",
   "runs": {
     "dev": {
@@ -94,8 +94,8 @@
         "input": "upstream test_wavs/zh.wav",
         "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
         "duration_ms": 5592,
-        "elapsed_ms": 125,
-        "processing_ms": 119.7,
+        "elapsed_ms": 266,
+        "processing_ms": 176.42,
         "transcript": "开饭时间早上9点至下午5点。",
         "independent_truth_available": false
       },
@@ -103,7 +103,7 @@
         "user_corrected_source": true,
         "company_model": true,
         "original_reference_is_not_a_flight_command": true,
-        "elapsed_ms": 2578,
+        "elapsed_ms": 2343,
         "phase": "review",
         "thinking_enabled": false
       },
@@ -201,8 +201,8 @@
         "input": "upstream test_wavs/zh.wav",
         "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
         "duration_ms": 5592,
-        "elapsed_ms": 281,
-        "processing_ms": 240.18,
+        "elapsed_ms": 219,
+        "processing_ms": 147.82,
         "transcript": "开饭时间早上9点至下午5点。",
         "independent_truth_available": false
       },
@@ -210,7 +210,7 @@
         "user_corrected_source": true,
         "company_model": true,
         "original_reference_is_not_a_flight_command": true,
-        "elapsed_ms": 2812,
+        "elapsed_ms": 2235,
         "phase": "review",
         "thinking_enabled": false
       },
