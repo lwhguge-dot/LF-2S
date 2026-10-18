@@ -11,6 +11,7 @@ from lf2s_protocol.version import DIALECT_HASH, VERSION
 from lf2s_protocol.wire import ProtocolError, decode_datagram
 
 from service.controller import controller_snapshot
+from service.gateway import Gateway
 from service.serialization import clean, message_json
 from service.tasks import TERMINAL, TaskService
 from service.version import APPLICATION_VERSION
@@ -19,7 +20,7 @@ from simulation.network import SCENARIOS, Simulation
 # Application simulation budgets, not signed production flight parameters.
 LINK_MAX_AGE_MS = 1000
 MEASUREMENT_MAX_AGE_MS = 300
-REBOOT_RECONNECT_REASON = "飞控已重启；旧会话失效，请断开后重新连接"
+REBOOT_RECONNECT_REASON = "飞控已重启或会话已改变；旧会话失效，请断开后重新连接"
 
 
 class Adapter:
@@ -27,6 +28,10 @@ class Adapter:
         self.started = time.monotonic()
         self.journal = journal
         self.sim = Simulation(root, self.now)
+        self.gateway = None
+        self.gateway_heartbeat_at = None
+        self.gateway_recovery_at = None
+        self.gateway_recovery_tries = 0
         self.connected = False
         self.client = Client()
         self.last_state = None
@@ -37,6 +42,7 @@ class Adapter:
         self.profile_at = None
         self.failure = None
         self.reconnect_required = False
+        self.reconnect_reason = None
         self.operations = {}
         self.waiters = {}
         self.query_request = None
@@ -49,6 +55,8 @@ class Adapter:
         self.replaying = False
         self.tasks = TaskService(self)
         self.journal.context = lambda: {
+            "simulation": self.gateway is None,
+            "source": "uart1" if self.gateway else "synthetic",
             "boot_id": str(self.client.boot) if self.client.boot else None,
             "session_id": str(self.client.session) if self.client.session else None,
             "client_nonce": str(self.client.nonce) if self.client.nonce else None,
@@ -58,9 +66,13 @@ class Adapter:
         return int((time.monotonic() - self.started) * 1000)
 
     async def start(self):
-        await self.sim.start(self.receive)
+        await self.sim.start(self.receive_simulation)
         self.task = asyncio.create_task(self.schedule())
         self.journal.add("service", "本地服务就绪；只读模拟模式，不连接飞机")
+
+    def receive_simulation(self, raw, source):
+        if self.gateway is None:
+            self.receive(raw, source)
 
     def clear_session(self, reason):
         self.tasks.interrupt(reason)
@@ -74,8 +86,20 @@ class Adapter:
         self.profile = self.profile_at = self.query_request = None
         self.failure = None
         self.reconnect_required = False
+        self.reconnect_reason = None
         self.last_reject = None
         self.known_requests.clear()
+        self.gateway_recovery_at = None
+        self.gateway_recovery_tries = 0
+
+    def require_reconnect(self, reason):
+        self.tasks.interrupt(reason)
+        self.reconnect_required = True
+        self.reconnect_reason = self.failure = reason
+        self.client.pending.clear()
+        self.telemetry.clear()
+        self.profile = self.profile_at = None
+        self.last_state = self.state_at = self.last_rx = None
 
     def begin_operation(self, name):
         op_id = secrets.token_hex(6)
@@ -97,9 +121,9 @@ class Adapter:
         if self.replaying:
             raise ProtocolError("回放通道只读，禁止发送协议请求")
         if self.reconnect_required:
-            raise ProtocolError(REBOOT_RECONNECT_REASON)
+            raise ProtocolError(self.reconnect_reason or REBOOT_RECONNECT_REASON)
         readonly = msg.get_msgId() == 60000 and msg.op in (1, 8)
-        simulated = self.sim.task_bench and (
+        simulated = self.gateway is None and self.sim.task_bench and (
             (msg.get_msgId() == 60000 and msg.op in (2, 3, 4, 5, 6, 7))
             or (msg.get_msgId() == 60001 and msg.op in (1, 2, 5, 6, 7, 8))
         )
@@ -121,7 +145,24 @@ class Adapter:
             wire=message_json(msg),
             raw_hex=raw.hex(),
         )
-        self.sim.send(raw)
+        if self.gateway is not None:
+            self.gateway.send(raw)
+        else:
+            self.sim.send(raw)
+
+    async def connect_gateway(self, host):
+        if self.replaying or self.connected or self.gateway is not None:
+            raise ProtocolError("请先断开当前连接并退出回放，再连接真实 UART1")
+        gateway = Gateway(host, self.receive)
+        await gateway.start()
+        self.gateway = gateway
+        self.gateway_heartbeat_at = None
+        self.journal.add("connection", "连接真实 UART1 只读遥测；飞行动作关闭")
+        try:
+            return await self.connect()
+        except BaseException:
+            self.disconnect()
+            raise
 
     async def connect(self):
         if self.replaying:
@@ -150,6 +191,9 @@ class Adapter:
     def disconnect(self):
         self.tasks.interrupt("连接已断开")
         self.connected = False
+        if self.gateway is not None:
+            self.gateway.close()
+            self.gateway = None
         for op in self.operations.values():
             if op["status"] in ("pending", "accepted", "in_progress"):
                 op.update(status="unknown", reason="连接已断开")
@@ -205,7 +249,7 @@ class Adapter:
 
     def reject(self, reason):
         self.rejected += 1
-        self.failure = REBOOT_RECONNECT_REASON if self.reconnect_required else reason
+        self.failure = (self.reconnect_reason or REBOOT_RECONNECT_REASON) if self.reconnect_required else reason
         if self.last_reject != reason:
             self.journal.add("warning", reason)
             self.last_reject = reason
@@ -214,10 +258,11 @@ class Adapter:
         if not self.connected:
             return
         if self.reconnect_required:
-            self.reject(REBOOT_RECONNECT_REASON)
+            self.reject(self.reconnect_reason or REBOOT_RECONNECT_REASON)
             return
         try:
-            if source != self.sim.esp_address:
+            peer = self.gateway.peer if self.gateway is not None else self.sim.esp_address
+            if source != peer:
                 raise ProtocolError("UDP 来源不匹配，数据已拒绝")
             msg = decode_datagram(raw)
             mid = msg.get_msgId()
@@ -226,13 +271,12 @@ class Adapter:
             if mid == 60003:
                 if msg.dialect_hash != DIALECT_HASH:
                     raise ProtocolError("协议指纹不匹配，请检查两端协议版本")
-                if self.client.boot and msg.boot_id != self.client.boot:
-                    self.reconnect_required = True
-                    self.tasks.interrupt(REBOOT_RECONNECT_REASON)
-                    self.client.pending.clear()
-                    self.telemetry.clear()
-                    self.profile = self.profile_at = None
-                    self.last_state = self.state_at = self.last_rx = None
+                if self.client.boot and (
+                    msg.boot_id != self.client.boot
+                    or (self.gateway is not None and self.client.session and
+                        (msg.session_id, msg.client_nonce) != (self.client.session, self.client.nonce))
+                ):
+                    self.require_reconnect(REBOOT_RECONNECT_REASON)
                     raise ProtocolError(REBOOT_RECONNECT_REASON)
                 if msg.sample_id <= self.client.sample:
                     return
@@ -241,6 +285,10 @@ class Adapter:
                 if known is None:
                     return  # no unsolicited ACK may establish a session or satisfy an operation
                 req = decode_datagram(known[0])
+                if (self.gateway is not None and self.client.session and req.op == 1 and
+                    (msg.boot_id != self.client.boot or msg.session_id != self.client.session)):
+                    self.require_reconnect(REBOOT_RECONNECT_REASON)
+                    raise ProtocolError(REBOOT_RECONNECT_REASON)
                 if (msg.request_msg, msg.echo_op) != (req.get_msgId(), req.op):
                     raise ProtocolError("结果与原请求不匹配")
                 if req.op == 1 and msg.client_nonce != self.client.nonce:
@@ -293,12 +341,25 @@ class Adapter:
                 not self.client.session or self.failure is not None
             ):
                 return
+            if mid in (30, 331) and self.gateway is not None:
+                if self.last_state is None or self.now() - self.state_at >= LINK_MAX_AGE_MS:
+                    return
+                old = self.telemetry.get(mid)
+                field = "time_boot_ms" if mid == 30 else "time_usec"
+                if old is not None:
+                    delta = getattr(msg, field) - getattr(old[0], field)
+                    if mid == 30:
+                        delta &= 0xFFFFFFFF
+                    if delta <= 0 or (mid == 30 and delta >= 0x80000000):
+                        return  # Duplicate/backward sample never refreshes age.
             self.client.observe(raw)
             now = self.now()
             self.last_rx = now
             self.received += 1
             if mid == 60003:
                 self.last_state, self.state_at = msg, now
+                self.gateway_recovery_at = None
+                self.gateway_recovery_tries = 0
                 # Failures requiring reconnection remain latched. Transient mismatches recover only
                 # when a valid current-context state actually arrives, never from arbitrary traffic.
                 if self.failure and not self.reconnect_required:
@@ -313,7 +374,7 @@ class Adapter:
                 self.profile, self.profile_at = msg, now
                 self.journal.add(
                     "rx",
-                    "收到模拟配置；未签认",
+                    "收到真实只读配置；未签认" if self.gateway else "收到模拟配置；未签认",
                     wire=message_json(msg),
                     raw_hex=raw.hex(),
                 )
@@ -382,6 +443,32 @@ class Adapter:
         while True:
             # Onboard synthetic timers continue when the PC is disconnected or its link is paused.
             self.sim.tick()
+            if self.gateway is not None and self.connected and not self.reconnect_required and not self.failure:
+                now = self.now()
+                if self.gateway_heartbeat_at is None or now - self.gateway_heartbeat_at >= 500:
+                    # Peer idle budget in the paired 0.1.7 build is 3000ms.
+                    # Heartbeat maintains only transport presence; it never
+                    # refreshes FC state/measurement age or grants authority.
+                    self.gateway.send(self.client.codec.encode(
+                        "HEARTBEAT", type=6, autopilot=8, base_mode=0,
+                        custom_mode=0, system_status=4, mavlink_version=3,
+                    ))
+                    self.gateway_heartbeat_at = now
+                if self.state_at is not None and now - self.state_at >= 750:
+                    if self.gateway_recovery_at is None or now - self.gateway_recovery_at >= 500:
+                        if self.gateway_recovery_tries >= 3:
+                            self.require_reconnect("真实 UART1 只读链路恢复失败；请断开后显式重连")
+                        else:
+                            known = self.known_requests.get(1)
+                            if known:
+                                # Reuse the exact original HELLO after a peer
+                                # reset. Never create a nonce/session or replay
+                                # a control/action request. A different returned
+                                # boot/session latches explicit reconnection.
+                                self.gateway.send(known[0])
+                                self.gateway_recovery_at = now
+                                self.gateway_recovery_tries += 1
+                                self.journal.add("connection", "正在恢复同一只读会话；重发原 HELLO 字节")
             if self.connected:
                 for request_id, pending in list(self.client.pending.items()):
                     if self.now() - pending["last"] < self.client.ack_timeout_ms:
@@ -422,11 +509,13 @@ class Adapter:
             if phase != self.link_label:
                 self.link_label = phase
                 self.journal.add("connection", f"连接阶段：{phase}")
-            if self.journal.recorder:
+            if self.journal.recorder and self.gateway is None:
                 self.journal.recorder.sample(self.snapshot())
             await asyncio.sleep(0.1)
 
     def set_scenario(self, name):
+        if self.gateway is not None:
+            raise ProtocolError("真实 UART1 连接期间不能改变模拟场景")
         if self.replaying:
             raise ProtocolError("回放通道不能修改模拟器")
         if name == "task_bench":
@@ -493,7 +582,7 @@ class Adapter:
             "value": clean(value) if valid else None,
             "age_ms": age,
             "reason": reason,
-            "source": "synthetic",
+            "source": "uart1" if self.gateway is not None else "synthetic",
             "unit": {
                 "height": "m",
                 "position": "m / LOCAL_FLU",
@@ -536,11 +625,11 @@ class Adapter:
         return {
             "api_version": "1",
             "application_version": APPLICATION_VERSION,
-            "simulation": True,
+            "simulation": self.gateway is None,
             "service_pid": os.getpid(),
-            "read_only": self.replaying or not self.sim.task_bench,
+            "read_only": self.gateway is not None or self.replaying or not self.sim.task_bench,
             "hardware_control_allowed": False,
-            "task_fixture": self.sim.task_bench,
+            "task_fixture": self.gateway is None and self.sim.task_bench,
             "service_ready": True,
             "scenario": self.sim.scenario,
             "scenarios": SCENARIOS,
@@ -552,8 +641,8 @@ class Adapter:
                 "max_age_ms": LINK_MAX_AGE_MS,
                 "reason": self.failure
                 or ("超过 1000 ms 未收到当前会话状态" if phase == "stale" else None),
-                "transport": "127.0.0.1 UDP → 模拟 ESP32 → FCModel",
-                "ports": [
+                "transport": "UDP → ESP32 → STM32 UART1（只读）" if self.gateway else "127.0.0.1 UDP → 模拟 ESP32 → FCModel",
+                "ports": [self.gateway.local[1], self.gateway.peer[1]] if self.gateway else [
                     a[1]
                     for a in (
                         self.sim.pc_address,
@@ -589,11 +678,11 @@ class Adapter:
             ),
             "qualification": {
                 "configuration": "unsigned" if self.profile else "unknown",
-                "configuration_reason": "模拟配置未签认"
+                "configuration_reason": ("真实只读配置未签认" if self.gateway else "模拟配置未签认")
                 if self.profile
                 else "尚未读取配置",
                 "control_allowed": False,
-                "control_reason": "真实硬件与生产配置未签认；仅允许显式本机模拟任务",
+                "control_reason": "真实 UART1 仅观察遥测；飞行动作关闭" if self.gateway else "真实硬件与生产配置未签认；仅允许显式本机模拟任务",
                 "hardware_freshness_qualified": False,
                 "manual_latched": bool(state.manual_latched) if state else None,
                 "lease_id": state.lease_id if state else None,

@@ -18,9 +18,16 @@ contextBridge.exposeInMainWorld(
     replayClose: () => ipcRenderer.invoke("station:replayClose"),
     scenario: (name) => ipcRenderer.invoke("station:scenario", name),
     image: () => ipcRenderer.invoke("station:image"),
+    visionAnalyze: (capture) =>
+      ipcRenderer.invoke("station:visionAnalyze", capture),
+    visionCancel: (requestId) =>
+      ipcRenderer.invoke("station:visionCancel", requestId),
     benchConnect: (host, port) =>
       ipcRenderer.invoke("station:benchConnect", host, port),
     benchDisconnect: () => ipcRenderer.invoke("station:benchDisconnect"),
+    gatewayConnect: () => ipcRenderer.invoke("station:gatewayConnect"),
+    gatewayDisconnect: () => ipcRenderer.invoke("station:gatewayDisconnect"),
+    gatewayProfile: () => ipcRenderer.invoke("station:gatewayProfile"),
     fcUsbConnect: () => ipcRenderer.invoke("station:fcUsbConnect"),
     fcUsbDisconnect: () => ipcRenderer.invoke("station:fcUsbDisconnect"),
     textParse: (text) => ipcRenderer.invoke("station:textParse", text),

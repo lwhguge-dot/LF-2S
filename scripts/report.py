@@ -13,6 +13,39 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = json.loads((ROOT / "package.json").read_text("utf-8"))["version"]
 
 
+def uart1_summary(evidence):
+    runs = {}
+    for mode in ("dev", "package"):
+        path = evidence / f"uart1-{mode}-live.json"
+        if not path.is_file():
+            continue
+        saved = json.loads(path.read_text("utf-8"))
+        if saved.get("application_version") != VERSION:
+            continue
+        fresh = bool((saved.get("attitude") or {}).get("valid"))
+        runs[mode] = {
+            "passed": bool(saved.get("passed")) and fresh,
+            "checks": saved["checks"],
+            "boot_id": (saved.get("identity") or {}).get("boot_id"),
+            "fresh_attitude_recorded": fresh,
+            "hardware_control_allowed": False,
+        }
+    result = {
+        "application_version": VERSION,
+        "scope": "Physical PC/ESP32/STM32 UART1 read-only session, configuration query, attitude and camera display; no control or flight acceptance",
+        "runs": runs,
+    }
+    hardware_path = evidence / "uart1-hardware-summary.json"
+    if hardware_path.is_file():
+        hardware = json.loads(hardware_path.read_text("utf-8"))
+        if hardware.get("application_version") == VERSION:
+            result["operator_assisted_hardware"] = hardware
+    (evidence / "uart1-public-summary.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n", "utf-8"
+    )
+    return result
+
+
 def usb_summary(evidence):
     results = {}
     for mode in ("dev", "package", "package-usb-removal"):
@@ -98,6 +131,13 @@ def main():
         encoding="utf-8",
     )
     usb = usb_summary(evidence)
+    uart1 = uart1_summary(evidence)
+    uart1_note = (
+        "本版开发窗口和独立目录包均完成真实 UART1 只读会话、配置查询、相机与新鲜姿态并显、断开清理检查。"
+        if set(uart1["runs"]) == {"dev", "package"}
+        and all(row["passed"] for row in uart1["runs"].values())
+        else "本版真实 UART1 双模式检查尚未全部通过，逐项实际结果见 uart1-public-summary.json。"
+    )
     voice_runs = {}
     for mode in ("dev", "package"):
         voice_path = evidence / f"voice-{mode}-live.json"
@@ -182,7 +222,7 @@ def main():
         f"开发版和目录包已连接实物 ESP32，固件 {physical['package']['firmware']}；"
         "图像解码、对焦请求接受、飞控未知和断开失效检查通过。"
         if len(physical) == 2
-        else "本版本未重新完成 ESP32 双模式实板测试；先前相机结果保留在历史记录，不计入本版本实机通过。"
+        else "本版本未重新完成独立相机设置/对焦的整套实板检查；先前结果保留原版本。UART1 并显相机的本版实测在独立小节记录。"
     )
     failed_modes = [
         name for name, row in physical_attempts.items() if not row["passed"]
@@ -201,7 +241,7 @@ def main():
     real_asr_note = (
         "本版显式启动本机真实SenseVoice CPU，参考样音结果见voice-public-summary.json；无独立标准转写，不计算准确率。"
         if any(row["real_local_asr"] for row in voice_runs.values())
-        else "本版语音回归使用测试麦克风及模拟ASR，没有重跑真实SenseVoice或公司Qwen；本机官方样音和人工修改后调用公司Qwen的历史证据保留在原版本。"
+        else "本版未重新运行完整的麦克风窗口、真实SenseVoice或公司Qwen语音链路；音频软件契约回归与旧版官方样音结果分别保留，不计为本版真人语音或公司服务验收。"
     )
     stability_path = evidence / "preview-stability-summary.json"
     stability = (
@@ -263,7 +303,7 @@ def main():
         "actual_desktop_checks_each": len(dev["checks"]),
         "specific_desktop_checks": sorted(controller_checks),
         "old_report_cleared_on_stale_block_reboot_replay_bench_or_service_failure": True,
-        "no_new_hardware_or_action_transport": True,
+        "diagnostic_display_has_no_control_output": True,
         "source_sha256_lf": {
             name: hashlib.sha256(
                 (ROOT / name).read_bytes().replace(b"\r\n", b"\n")
@@ -306,7 +346,7 @@ def main():
     report = {
         "date": datetime.now().astimezone().isoformat(),
         "platform": platform.platform(),
-        "stage": "Visual task workbench + S0–S2 + vendor FC USB display bench + Mandarin review + non-thinking suggestions",
+        "stage": "UART1 read-only telemetry + visual task workbench + S0–S2 + vendor FC USB display bench + Mandarin review",
         "version": VERSION,
         "backend": backend,
         "development_desktop_checks": len(dev["checks"]),
@@ -314,7 +354,8 @@ def main():
         "packaged_runtime": packaged["runtime"],
         "cleanup": cleanup,
         "passed": True,
-        "scope": "synthetic tasks/replay, vendor FC USB input and ESP32 display benches; no UART/control, optical timing or flight acceptance",
+        "scope": "Synthetic tasks/replay and display benches; version-matched physical UART1 evidence listed separately; no control, optical timing or flight acceptance",
+        "uart1_readonly_telemetry": uart1,
         "fc_usb_display_bench": usb,
         "company_text_suggestions": text_runs,
         "mandarin_transcription_review": voice_runs,
@@ -349,6 +390,7 @@ def main():
         "preview_performance": performance,
         "controller_protocol_diagnostics": controller,
         "visual_task_workbench": workbench_runs,
+        "uart1_readonly_telemetry": uart1,
     }
     (evidence / "public-verification.json").write_text(
         json.dumps(public, ensure_ascii=False, indent=2) + "\n", "utf-8"
@@ -361,7 +403,7 @@ def main():
     )
     text = f"""# LF-2S 上位机软件回归与实物台架报告
 
-日期：{datetime.now().astimezone().date()}。版本：{VERSION}。本机模拟监控、任务闭环与只读回放已验证。飞控 USB 实板结果见下文。{physical_note} 真实 UART、机载动作与 S3 整体尚未完成。
+日期：{datetime.now().astimezone().date()}。版本：{VERSION}。本机模拟监控、任务闭环与只读回放已验证。{uart1_note} 飞控 USB 与独立相机实板结果分别见下文。机载动作与 S3 整体尚未完成。
 
 ## 可运行产物
 
@@ -387,7 +429,15 @@ def main():
 
 大画面、右侧任务/识别信息与底部助手已进入实际Electron。新工作台检查使用本机HTTP模型响应夹具和合成JPEG，覆盖填入不发送、原文/新意图/建议流程、无许可或协议副作用、独立未知视觉字段、编辑和迟到隔离、调试返回保草稿不恢复旧建议、语音清理及后台失效清图。视口与画面占比见workbench-public-summary.json。公司文本调用另在下节记录。
 
-实时灯色/闪烁、视觉找路、斑马线与人民币张数/面额/金额尚未接入，当前显示未知。演示实物未准备，未验证自主飞行；界面和文字建议不构成这些能力的证据。
+单帧视觉观察入口为显式提交，并与图像来源和请求绑定；本版软件回归使用本机模型夹具和合成图片，不证明实景识别准确率。连续灯色/闪烁、视觉找路与飞行执行未验收，演示实物尚未准备。
+
+## UART1 真实只读遥测
+
+{uart1_note} 实测摘要见 `uart1-public-summary.json`，操作说明见 `docs/13_UART1真实遥测.md`。UDP → ESP32 → STM32 UART1 使用 115200、8N1，只允许 HELLO、QUERY_PROFILE 与地面站心跳；接收 CONTROL_STATE 和真实 MPU 姿态。工作台与设备页均显示横滚、俯仰、相对偏航，过期显示未知。
+
+持久启动号、会话号变化或网关重启后不会接纳旧遥测，需要显式重连。高度、位置、电压没有经过来源与单位核实，继续为 null。只读是电脑链路的约束，保留的本地原厂遥控/PID/电机路径未在本阶段验收；当前仅拆桨、遥控关闭、电池断开、USB 供电台架验证。
+
+本版实际即时重连记录覆盖HTTP先在线、相机尚未就绪、界面等待、相机与UART1恢复；匹配版本的操作者确认、启动号和检查结果见上述硬件摘要。前两次失败保留原始记录，不能用稍后成功覆盖。运行包构建清理PyInstaller缓存，并逐模块比对实际包内代码与当前源码；见frozen-backend-integrity.json。
 
 ## 飞控 USB 实物显示
 
@@ -399,7 +449,7 @@ USB 只读打开，没有输出报告、刷写、校准或解锁路径。高度/
 
 ## 无思考文本任务建议
 
-实际公司 API 的开发窗口/目录包结果见 `text-public-summary.json`，记录本版本实际输入和耗时。仅调用 `qwen38` 并显式设置 enable_thinking=false，拒绝思考内容。缺参输入本地澄清，完整输入联系公司服务并核对原文依据；本轮包含过路、清点纸币、只去B点和信号灯查询。编辑、取消清空旧建议；不发协议、不创建许可、不启动任务。软件测试独立覆盖超时、身份错误、截断、重复字段、数值及原文不符；小样本通过不能解释为通用自然语言理解准确率。
+匹配当前版本的实际公司 API 结果见 `text-public-summary.json`；未列出的运行没有在本版重新执行。实现仅调用 `qwen38` 并显式设置 enable_thinking=false，拒绝思考内容。缺参输入先本地澄清，完整输入才联系公司服务并核对原文依据。编辑、取消清空旧建议；不发协议、不创建许可、不启动任务。软件夹具独立覆盖超时、身份错误、截断、重复字段、数值及原文不符；这些结果不能解释为真实公司模型的通用准确率。
 
 ## 普通话录音与转写核对
 
@@ -411,7 +461,7 @@ USB 只读打开，没有输出报告、刷写、校准或解锁路径。高度/
 
 {physical_note}
 
-真实板测试独立于软件/模拟回归，使用 `tests/esp32_live.cjs`。实物摘要：`{json.dumps(physical, ensure_ascii=False)}`。原始实物 JSON 与照片留在本机，不随公开文档携带。显示成功与 AF 命令接受不证明光学对焦、曝光新鲜度或标定合格。实物连接占用期间模拟操作拒绝；回放关闭实物通道；飞控测量保持未知。固件的 UART 与动作出口关闭。
+独立相机测试使用 `tests/esp32_live.cjs`，实物摘要：`{json.dumps(physical, ensure_ascii=False)}`。UART1 与相机并行显示使用独立脚本和上节证据，不沿用旧版相机结果。原始 JSON 与照片留在本机。显示成功与 AF 命令接受不证明光学对焦、曝光新鲜度或标定合格。回放关闭实物通道，电脑真实动作出口保持关闭。
 
 ### 持续预览排查
 
@@ -454,7 +504,7 @@ USB 只读打开，没有输出报告、刷写、校准或解锁路径。高度/
 
 ## 明确未验收事项
 
-尚未交付 NSIS 安装/升级/卸载、数字签名、另一台干净 Windows 主机、真实 MAVLink UART/NRF、相机清晰度/采样新鲜度/标定、语音/视觉模型、机载故障处置或飞行验收。System32 PATH 和页面 offline 检查不能代替这些项目。商家原件和 ESP-IDF hello_world 保留，受控协议代码未变。
+尚未交付 NSIS 安装/升级/卸载、数字签名、另一台干净 Windows 主机、真实 NRF 业务、相机光学采样时序/标定、真人语音/实景识别准确率、机载故障处置或飞行验收。UART1 只读台架按上节独立留证，不推导为这些项目完成。商家原件和 ESP-IDF hello_world 保留，受控协议代码未变。
 
 下一阶段为 S3 真实主线；S4 独立图像、中文语音、视觉；S5 Mind+ 经有线手柄/NRF。详细入口在 `docs/03_验收与后续计划.md`。定位/高度失效时不能从本机状态提示推导“真实飞机一定悬停”。
 """

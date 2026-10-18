@@ -20,6 +20,7 @@ from lf2s_protocol.wire import ProtocolError  # noqa: E402
 
 from service.app import create_app  # noqa: E402
 from service.esp32 import (  # noqa: E402
+    CameraStarting,
     Esp32Bench,
     HttpSession,
     TransportError,
@@ -96,6 +97,85 @@ def station_health():
     return {**modern_health(), "firmware": "0.1.6", "wifi_mode": "sta",
             "wifi_ipv4": "192.168.137.175", "wifi_peer": True, "network_epoch": 9,
             "wifi_rssi_dbm": -32, "wifi_channel": 11}
+
+
+def starting_health():
+    return {**station_health(), "camera_ready": False, "camera_error": 0,
+            "sensor_pid": 0, "camera_stream_id": "0", "preview_width": 0,
+            "preview_height": 0, "jpeg_quality": 0}
+
+
+def test_starting_camera_is_distinct_from_protocol_incompatibility():
+    with pytest.raises(CameraStarting):
+        health_data({"content-type": "application/json"}, json.dumps(starting_health()).encode())
+    for changed in ({"control_forwarding": True}, {"protocol": "wrong"}, {"camera_error": 1}):
+        with pytest.raises(ProtocolError) as failed:
+            health_data({"content-type": "application/json"}, json.dumps({**starting_health(), **changed}).encode())
+        assert not isinstance(failed.value, CameraStarting)
+
+
+def test_explicit_connect_waits_for_camera_without_publishing_zero_identity(monkeypatch):
+    board = Board()
+    calls = 0
+
+    def request(*args):
+        nonlocal calls
+        calls += 1
+        board.health = starting_health() if calls < 3 else station_health()
+        return board.request(*args)
+
+    monkeypatch.setattr("service.esp32.http_request", request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        task = asyncio.create_task(bench.connect("192.168.4.1", 80))
+        await asyncio.sleep(.1)
+        assert bench.phase == "connecting" and bench.health is None and bench.paired_stream is None
+        await task
+        assert bench.phase == "online" and bench.paired_stream == station_health()["camera_stream_id"]
+        assert all(row[2:4] == ("GET", "/health") for row in board.calls)
+    asyncio.run(run())
+
+
+def test_camera_startup_wait_is_bounded_and_does_not_pair(monkeypatch):
+    board = Board()
+    board.health = starting_health()
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+    monkeypatch.setattr("service.esp32.CAMERA_STARTUP_WAIT_S", .03)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        with pytest.raises(ProtocolError, match="启动等待超时"):
+            await bench.connect("192.168.4.1", 80)
+        assert bench.phase == "error" and bench.paired_stream is None and bench.health is None
+    asyncio.run(run())
+
+
+def test_camera_restarting_during_existing_session_never_auto_pairs(monkeypatch):
+    board = Board()
+    monkeypatch.setattr("service.esp32.http_request", board.request)
+
+    async def run():
+        bench = Esp32Bench(Journal())
+        await bench.connect("192.168.4.1", 80)
+        original = bench.paired_stream
+        board.health = starting_health()
+        with pytest.raises(ProtocolError, match="显式重连"):
+            await bench.refresh()
+        assert bench.phase == "error" and bench.paired_stream == original and bench.health is None
+    asyncio.run(run())
+
+
+def test_af_esp_fail_is_diagnostic_and_does_not_reject_ready_camera():
+    source = {**station_health(), "autofocus_error": -1,
+              "autofocus_focused": False, "autofocus_busy": False}
+    value = health_data({"content-type": "application/json"}, json.dumps(source).encode())
+    assert value["autofocus_error"] == -1
+    assert value["autofocus_focused"] is False
+    assert value["physical_freshness_qualified"] is False
+    for changed in (True, -1.0, "-1", -(1 << 31) - 1, 1 << 31):
+        with pytest.raises(ProtocolError):
+            health_data({"content-type": "application/json"}, json.dumps({**source, "autofocus_error": changed}).encode())
 
 
 def test_wifi_diagnostics_are_board_reported_without_credential_passthrough():

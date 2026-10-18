@@ -49,7 +49,7 @@ try {
     if ($Task -eq 'check') {
         Invoke-Checked $appPython @('-m','ruff','check','service','simulation','scripts','tests')
         Invoke-Checked $appPython @('-B','scripts\sync_protocol.py','--check')
-        Invoke-Checked $appPython @('-m','pytest','tests\test_backend.py','tests\test_esp32.py','tests\test_fc_usb.py','tests\test_text_tasks.py','tests\test_demo_intents.py','tests\test_voice.py','tests\test_reboot_latch.py','tests\test_controller.py','-q','--junitxml=evidence\backend-junit.xml')
+        Invoke-Checked $appPython @('-m','pytest','tests\test_backend.py','tests\test_esp32.py','tests\test_fc_usb.py','tests\test_text_tasks.py','tests\test_demo_intents.py','tests\test_voice.py','tests\test_vision.py','tests\test_reboot_latch.py','tests\test_controller.py','tests\test_gateway.py','-q','--junitxml=evidence\backend-junit.xml')
         Invoke-Checked 'npm.cmd' @('run','check:desktop')
         Invoke-Checked 'npm.cmd' @('run','build')
         Invoke-Checked 'npm.cmd' @('run','verify:desktop')
@@ -76,7 +76,7 @@ try {
     if ($Task -eq 'dev') { Invoke-Checked 'node_modules\electron\dist\electron.exe' @('.'); return }
     if ($Task -eq 'package') {
         Invoke-Checked $appPython @('-B','scripts\sync_protocol.py','--check')
-        Invoke-Checked $appPython @('-m','PyInstaller','--noconfirm','--distpath','build\backend','--workpath','build\pyinstaller','service\lf2s-service.spec')
+        Invoke-Checked $appPython @('-m','PyInstaller','--clean','--noconfirm','--distpath','build\backend','--workpath','build\pyinstaller','service\lf2s-service.spec')
         Invoke-Checked $appPython @('-B','scripts\package.py')
     }
 } finally { Pop-Location }

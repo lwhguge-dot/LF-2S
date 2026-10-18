@@ -256,7 +256,7 @@ async function main() {
       isolation.node === "undefined" &&
         isolation.process === "undefined" &&
         isolation.keys.join(",") ===
-          "benchConnect,benchDisconnect,benchFocus,benchPreview,benchSettings,connect,disconnect,fcUsbConnect,fcUsbDisconnect,image,microphone,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart,textClear,textParse,voiceClear,voiceTranscribe" &&
+          "benchConnect,benchDisconnect,benchFocus,benchPreview,benchSettings,connect,disconnect,fcUsbConnect,fcUsbDisconnect,gatewayConnect,gatewayDisconnect,gatewayProfile,image,microphone,onState,openLogs,profile,recordings,replayClose,replayOpen,replaySeek,restart,scenario,state,taskCancel,taskQuery,taskStart,textClear,textParse,visionAnalyze,visionCancel,voiceClear,voiceTranscribe" &&
         prefs.contextIsolation &&
         prefs.sandbox &&
         !prefs.nodeIntegration &&

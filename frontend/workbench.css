@@ -725,7 +725,19 @@ dialog dd {
 }
 
 /* Keep the image, results and composer together on a desktop viewport. */
+.uart1-body {
+  display: grid;
+  gap: 8px;
+  padding: 14px 20px 18px;
+  color: #627985;
+  font-size: 12px;
+}
+.uart1-body p { margin: 0; }
+.uart1-body strong { font-size: 17px; color: #243e48; }
+.uart1-body small { line-height: 1.6; }
 @media (min-width: 761px) {
+  .task-column.uart-connected { height: auto; }
+  .uart-connected .uart1-card { flex: none; overflow: visible; }
   .task-column {
     display: flex;
     flex-direction: column;

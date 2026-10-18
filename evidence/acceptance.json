@@ -1,10 +1,10 @@
 {
-  "date": "2026-10-18T13:30:36.729077+08:00",
+  "date": "2026-10-18T21:02:35.225647+08:00",
   "platform": "Windows-11-10.0.26200-SP0",
-  "stage": "Visual task workbench + S0–S2 + vendor FC USB display bench + Mandarin review + non-thinking suggestions",
-  "version": "0.8.1",
+  "stage": "UART1 read-only telemetry + visual task workbench + S0–S2 + vendor FC USB display bench + Mandarin review",
+  "version": "0.9.0",
   "backend": {
-    "tests": 272,
+    "tests": 300,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -49,502 +49,207 @@
     "arch": "x64"
   },
   "cleanup": {
-    "scope": "Only this application workspace; unrelated processes are not terminated",
-    "checked_at": "2026-10-18T13:24:09.7228505+08:00",
+    "checked_at": "2026-10-18T20:58:08.1203350+08:00",
     "processes": [],
+    "scope": "Only this application workspace; unrelated processes are not terminated",
     "passed": true
   },
   "passed": true,
-  "scope": "synthetic tasks/replay, vendor FC USB input and ESP32 display benches; no UART/control, optical timing or flight acceptance",
+  "scope": "Synthetic tasks/replay and display benches; version-matched physical UART1 evidence listed separately; no control, optical timing or flight acceptance",
+  "uart1_readonly_telemetry": {
+    "application_version": "0.9.0",
+    "scope": "Physical PC/ESP32/STM32 UART1 read-only session, configuration query, attitude and camera display; no control or flight acceptance",
+    "runs": {
+      "dev": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "real_source_and_readonly",
+            "passed": true
+          },
+          {
+            "name": "real_boot_session_identity",
+            "passed": true
+          },
+          {
+            "name": "attitude_visible_in_tools",
+            "passed": true
+          },
+          {
+            "name": "telemetry_survives_gateway_idle_window",
+            "passed": true
+          },
+          {
+            "name": "report_records_fresh_recovered_attitude",
+            "passed": true
+          },
+          {
+            "name": "camera_and_telemetry_together",
+            "passed": true
+          },
+          {
+            "name": "attitude_fits_visible_card_without_internal_scrolling",
+            "passed": true
+          },
+          {
+            "name": "connection_strip_reports_real_uart1",
+            "passed": true
+          },
+          {
+            "name": "disconnect_clears_current_identity",
+            "passed": true
+          },
+          {
+            "name": "no_renderer_errors",
+            "passed": true
+          }
+        ],
+        "boot_id": "1190167377",
+        "fresh_attitude_recorded": true,
+        "hardware_control_allowed": false
+      },
+      "package": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "real_source_and_readonly",
+            "passed": true
+          },
+          {
+            "name": "real_boot_session_identity",
+            "passed": true
+          },
+          {
+            "name": "attitude_visible_in_tools",
+            "passed": true
+          },
+          {
+            "name": "telemetry_survives_gateway_idle_window",
+            "passed": true
+          },
+          {
+            "name": "report_records_fresh_recovered_attitude",
+            "passed": true
+          },
+          {
+            "name": "camera_and_telemetry_together",
+            "passed": true
+          },
+          {
+            "name": "attitude_fits_visible_card_without_internal_scrolling",
+            "passed": true
+          },
+          {
+            "name": "connection_strip_reports_real_uart1",
+            "passed": true
+          },
+          {
+            "name": "disconnect_clears_current_identity",
+            "passed": true
+          },
+          {
+            "name": "no_renderer_errors",
+            "passed": true
+          }
+        ],
+        "boot_id": "1190167377",
+        "fresh_attitude_recorded": true,
+        "hardware_control_allowed": false
+      }
+    },
+    "operator_assisted_hardware": {
+      "application_version": "0.9.0",
+      "timestamp": "2026-10-18T20:47:35.184956+08:00",
+      "scope": "Physical USB-powered propeller-off UART1 read-only bench; no battery, optical calibration, control or flight acceptance",
+      "firmware_version": "0.2.0",
+      "elf_sha256": "6f6ef60f374a2e87271a5aa18175d729b9b194ab8b160b9c5bb0fb454491bccd",
+      "deployment_readback_verified": true,
+      "calibration_preserved": true,
+      "orientation": {
+        "passed": true,
+        "nose_up_positive_pitch": true,
+        "right_down_positive_roll": true,
+        "angle_calibrated": false,
+        "yaw_verified": false
+      },
+      "concurrent_camera_and_attitude": {
+        "seconds": 332.6560000000027,
+        "snapshots": 2982,
+        "fresh_attitude_snapshots": 2202,
+        "unknown_attitude_snapshots": 780,
+        "link_phases": {
+          "online": 2974,
+          "stale": 8
+        },
+        "camera_frames": 323,
+        "camera_errors": 0,
+        "esp_counter_delta": {
+          "uart_frames": 7063,
+          "uart_errors": 0,
+          "uart_rejected": 0,
+          "uart_submitted": 569
+        }
+      },
+      "cold_power_cycle": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "power_loss_invalidates_current_attitude",
+            "passed": true
+          },
+          {
+            "name": "new_boot_does_not_auto_adopt_old_session",
+            "passed": true
+          },
+          {
+            "name": "disconnect_clears_old_boot_and_session",
+            "passed": true
+          },
+          {
+            "name": "persistent_boot_id_increases_after_true_power_cycle",
+            "passed": true
+          },
+          {
+            "name": "new_boot_has_new_explicit_session",
+            "passed": true
+          },
+          {
+            "name": "fresh_real_attitude_returns_readonly",
+            "passed": true
+          },
+          {
+            "name": "configuration_query_recovers_after_new_session",
+            "passed": true
+          },
+          {
+            "name": "camera_and_uart1_resume_together",
+            "passed": true
+          },
+          {
+            "name": "no_renderer_errors",
+            "passed": true
+          }
+        ],
+        "before_boot_id": "1190167376",
+        "after_boot_id": "1190167377",
+        "explicit_reconnect": true,
+        "initial_camera_ready": false,
+        "bounded_camera_startup_wait_observed": true
+      },
+      "initial_failed_cycle_retained": true,
+      "hardware_control_allowed": false,
+      "flight_qualified": false
+    }
+  },
   "fc_usb_display_bench": {},
-  "company_text_suggestions": {
-    "dev": {
-      "passed": true,
-      "checks": [
-        {
-          "name": "configured_non_thinking_no_startup_request",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_0",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_0",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_1",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_1",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_2",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_2",
-          "passed": true
-        },
-        {
-          "name": "exact_original_units_visible",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_3",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_3",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_4",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_4",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_5",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_5",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_6",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_6",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_7",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_7",
-          "passed": true
-        },
-        {
-          "name": "editing_hides_previous_suggestion",
-          "passed": true
-        },
-        {
-          "name": "cancel_does_not_restore_late_result",
-          "passed": true
-        },
-        {
-          "name": "no_renderer_errors",
-          "passed": true
-        }
-      ],
-      "thinking_enabled": false,
-      "cases": [
-        {
-          "phase": "clarify",
-          "provider": "local_validation",
-          "elapsed_ms": 0
-        },
-        {
-          "phase": "clarify",
-          "provider": "local_validation",
-          "elapsed_ms": 0
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 3157
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 3000
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1797
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1782
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1750
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1563
-        }
-      ]
-    },
-    "package": {
-      "passed": true,
-      "checks": [
-        {
-          "name": "configured_non_thinking_no_startup_request",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_0",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_0",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_1",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_1",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_2",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_2",
-          "passed": true
-        },
-        {
-          "name": "exact_original_units_visible",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_3",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_3",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_4",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_4",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_5",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_5",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_6",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_6",
-          "passed": true
-        },
-        {
-          "name": "source_and_phase_7",
-          "passed": true
-        },
-        {
-          "name": "no_permission_or_wire_side_effect_7",
-          "passed": true
-        },
-        {
-          "name": "editing_hides_previous_suggestion",
-          "passed": true
-        },
-        {
-          "name": "cancel_does_not_restore_late_result",
-          "passed": true
-        },
-        {
-          "name": "no_renderer_errors",
-          "passed": true
-        }
-      ],
-      "thinking_enabled": false,
-      "cases": [
-        {
-          "phase": "clarify",
-          "provider": "local_validation",
-          "elapsed_ms": 0
-        },
-        {
-          "phase": "clarify",
-          "provider": "local_validation",
-          "elapsed_ms": 0
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 3078
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1859
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1750
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1953
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1656
-        },
-        {
-          "phase": "review",
-          "provider": "company_model",
-          "elapsed_ms": 1687
-        }
-      ]
-    }
-  },
-  "mandarin_transcription_review": {
-    "dev": {
-      "passed": true,
-      "checks": [
-        {
-          "name": "no_startup_audio_or_model_request",
-          "passed": true
-        },
-        {
-          "name": "microphone_denied_before_record_click",
-          "passed": true
-        },
-        {
-          "name": "video_permission_stays_denied",
-          "passed": true
-        },
-        {
-          "name": "recording_is_local_until_explicit_submit",
-          "passed": true
-        },
-        {
-          "name": "explicit_save_matches_submitted_wav",
-          "passed": true
-        },
-        {
-          "name": "audio_graph_and_ipc_produce_bounded_mono_pcm",
-          "passed": true
-        },
-        {
-          "name": "transcription_does_not_parse_or_authorize",
-          "passed": true
-        },
-        {
-          "name": "adoption_only_fills_editable_original",
-          "passed": true
-        },
-        {
-          "name": "explicit_parse_keeps_non_thinking_and_no_action",
-          "passed": true
-        },
-        {
-          "name": "permission_revoked_after_recording",
-          "passed": true
-        },
-        {
-          "name": "cancel_drops_late_transcript_and_audio",
-          "passed": true
-        },
-        {
-          "name": "actual_local_cpu_reference_reaches_vue_review",
-          "passed": true
-        },
-        {
-          "name": "reviewer_can_correct_text_before_parse",
-          "passed": true
-        },
-        {
-          "name": "new_audio_adoption_hides_previous_text_suggestion",
-          "passed": true
-        },
-        {
-          "name": "explicit_corrected_text_reaches_actual_company_model",
-          "passed": true
-        },
-        {
-          "name": "page_unmount_stops_audio_and_discards_transcript",
-          "passed": true
-        },
-        {
-          "name": "returning_does_not_restore_audio_or_transcript",
-          "passed": true
-        },
-        {
-          "name": "fifteen_second_limit_stops_device",
-          "passed": true
-        },
-        {
-          "name": "backend_restart_discards_audio_and_old_results",
-          "passed": true
-        },
-        {
-          "name": "renderer_has_no_errors",
-          "passed": true
-        }
-      ],
-      "fake_microphone": true,
-      "real_local_asr": true,
-      "company_asr": false,
-      "company_model": true,
-      "reference": {
-        "input": "upstream test_wavs/zh.wav",
-        "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
-        "duration_ms": 5592,
-        "elapsed_ms": 266,
-        "processing_ms": 176.42,
-        "transcript": "开饭时间早上9点至下午5点。",
-        "independent_truth_available": false
-      },
-      "corrected_reference_task": {
-        "user_corrected_source": true,
-        "company_model": true,
-        "original_reference_is_not_a_flight_command": true,
-        "elapsed_ms": 2343,
-        "phase": "review",
-        "thinking_enabled": false
-      },
-      "human_mandarin_accuracy_accepted": false
-    },
-    "package": {
-      "passed": true,
-      "checks": [
-        {
-          "name": "no_startup_audio_or_model_request",
-          "passed": true
-        },
-        {
-          "name": "microphone_denied_before_record_click",
-          "passed": true
-        },
-        {
-          "name": "video_permission_stays_denied",
-          "passed": true
-        },
-        {
-          "name": "recording_is_local_until_explicit_submit",
-          "passed": true
-        },
-        {
-          "name": "explicit_save_matches_submitted_wav",
-          "passed": true
-        },
-        {
-          "name": "audio_graph_and_ipc_produce_bounded_mono_pcm",
-          "passed": true
-        },
-        {
-          "name": "transcription_does_not_parse_or_authorize",
-          "passed": true
-        },
-        {
-          "name": "adoption_only_fills_editable_original",
-          "passed": true
-        },
-        {
-          "name": "explicit_parse_keeps_non_thinking_and_no_action",
-          "passed": true
-        },
-        {
-          "name": "permission_revoked_after_recording",
-          "passed": true
-        },
-        {
-          "name": "cancel_drops_late_transcript_and_audio",
-          "passed": true
-        },
-        {
-          "name": "actual_local_cpu_reference_reaches_vue_review",
-          "passed": true
-        },
-        {
-          "name": "reviewer_can_correct_text_before_parse",
-          "passed": true
-        },
-        {
-          "name": "new_audio_adoption_hides_previous_text_suggestion",
-          "passed": true
-        },
-        {
-          "name": "explicit_corrected_text_reaches_actual_company_model",
-          "passed": true
-        },
-        {
-          "name": "page_unmount_stops_audio_and_discards_transcript",
-          "passed": true
-        },
-        {
-          "name": "returning_does_not_restore_audio_or_transcript",
-          "passed": true
-        },
-        {
-          "name": "fifteen_second_limit_stops_device",
-          "passed": true
-        },
-        {
-          "name": "backend_restart_discards_audio_and_old_results",
-          "passed": true
-        },
-        {
-          "name": "renderer_has_no_errors",
-          "passed": true
-        }
-      ],
-      "fake_microphone": true,
-      "real_local_asr": true,
-      "company_asr": false,
-      "company_model": true,
-      "reference": {
-        "input": "upstream test_wavs/zh.wav",
-        "audio_sha256": "b77f1794fe374a0ba1ee1dc458bfaf9349496cbbfc32780c50ba3c5a7ad8e373",
-        "duration_ms": 5592,
-        "elapsed_ms": 219,
-        "processing_ms": 147.82,
-        "transcript": "开饭时间早上9点至下午5点。",
-        "independent_truth_available": false
-      },
-      "corrected_reference_task": {
-        "user_corrected_source": true,
-        "company_model": true,
-        "original_reference_is_not_a_flight_command": true,
-        "elapsed_ms": 2235,
-        "phase": "review",
-        "thinking_enabled": false
-      },
-      "human_mandarin_accuracy_accepted": false
-    }
-  },
+  "company_text_suggestions": {},
+  "mandarin_transcription_review": {},
   "esp32_display_bench": {},
   "esp32_latest_attempts": {},
   "preview_stability": null,
   "preview_performance": null,
   "controller_protocol_diagnostics": {
-    "application_version": "0.8.1",
+    "application_version": "0.9.0",
     "scope": "Current protocol report display; saved85C byte ingress and real Electron simulation UI, no physical UART/control",
     "backend_regressions": 14,
     "saved_C_scenarios": 2,
@@ -559,19 +264,19 @@
       "live_controller_diagnostics_do_not_reuse_historical_replay_state"
     ],
     "old_report_cleared_on_stale_block_reboot_replay_bench_or_service_failure": true,
-    "no_new_hardware_or_action_transport": true,
+    "diagnostic_display_has_no_control_output": true,
     "source_sha256_lf": {
       "service/controller.py": "1a441cf232b328da66824d0f2a0fbbb2e5b45e4b91175479e0c803d1686c3fc7",
-      "service/adapter.py": "2af50f7ac757bcb991fec95064402b5703e903e71927ae4b83e674738d88789e",
-      "service/app.py": "63ce4ef5a2a4ed5293194a203935d521f108bc176546c13ddeef0f3f0e5dd268",
+      "service/adapter.py": "e6f601d2f4319c7c807cfdbd797102a6affe18faff9e63b1c66370c0aca64e68",
+      "service/app.py": "6ce31ed0b07b47449481f5d44d1c4e9d364b14972c3c6b8d54355afd30a3e827",
       "frontend/ControllerPanel.vue": "e716f31f2a4343841819abfd57b5f0fb9f0970a7f30cc09ffdfdb71526d9faab",
-      "frontend/App.vue": "9505561795e8ea9cb2b0c526ec9d8563884c2f6de19a51a9686f52c30cfad87b",
-      "frontend/bridge.ts": "3563cc361a0bed33867450ca0dc1555bbaa73b8031995fd56a23e03801763421",
+      "frontend/App.vue": "97a5fb2b2c5185009186d740596a02eb69a98a62028b2d50b712755b88347fa3",
+      "frontend/bridge.ts": "3c6af804e74feda4eb6c83bd1ae5dbaa59b408da01a2a53bc5f2ec3c98c2f5ce",
       "tests/test_controller.py": "bba127d8926e7e9b1c73e408d4a8be9b2ac26a53e953b22e1c4a2e9028f3627b",
-      "tests/desktop.cjs": "76b64ec5d15ae7375eb32178edb658086580066cca9c28faaeecc83a379f3f63",
+      "tests/desktop.cjs": "2d78715d75ed3be44850288b6f27874085c53e3314820c3e3b4fbf7d30d5bbe6",
       "tests/s2_desktop.cjs": "ec64ad37a70986926f21fa362a9d4c05893fade3c433a13da307b9052921e548",
       "tests/fixtures/fc-estimator-fault-arm.json": "04dbef20a6602b9ab366bb271a2b5b8007f23d1181e24d1847043cb943a69670",
-      "package.json": "5656919eec046f30f291b2767698f6aba817ebf2220be0aba70c2780875b755e"
+      "package.json": "900026690c73bf83bee272a29af53f7449322446bfe16a101b6697a29fc8157e"
     }
   },
   "visual_task_workbench": {
@@ -635,6 +340,22 @@
           "passed": true
         },
         {
+          "name": "explicit_analysis_sends_only_the_selected_synthetic_jpeg",
+          "passed": true
+        },
+        {
+          "name": "cancelled_model_reply_cannot_restore_observation",
+          "passed": true
+        },
+        {
+          "name": "observation_hash_matches_model_input_and_frozen_display_frame",
+          "passed": true
+        },
+        {
+          "name": "model_observation_is_visibly_unverified_and_has_no_action_permission",
+          "passed": true
+        },
+        {
           "name": "goto_B_is_not_automatically_money_counting",
           "passed": true
         },
@@ -687,10 +408,10 @@
         ],
         "document": [
           375,
-          1305
+          1364
         ],
         "camera_width": 347,
-        "camera_height": 436.1953125,
+        "camera_height": 476.390625,
         "assistant_width": 347
       },
       "scope": "Real Electron/backend/IPC; local HTTP model fixture, synthetic loopback picture only; no company API/hardware/microphone/control"
@@ -755,6 +476,22 @@
           "passed": true
         },
         {
+          "name": "explicit_analysis_sends_only_the_selected_synthetic_jpeg",
+          "passed": true
+        },
+        {
+          "name": "cancelled_model_reply_cannot_restore_observation",
+          "passed": true
+        },
+        {
+          "name": "observation_hash_matches_model_input_and_frozen_display_frame",
+          "passed": true
+        },
+        {
+          "name": "model_observation_is_visibly_unverified_and_has_no_action_permission",
+          "passed": true
+        },
+        {
           "name": "goto_B_is_not_automatically_money_counting",
           "passed": true
         },
@@ -807,10 +544,10 @@
         ],
         "document": [
           375,
-          1305
+          1364
         ],
         "camera_width": 347,
-        "camera_height": 436.1953125,
+        "camera_height": 476.390625,
         "assistant_width": 347
       },
       "scope": "Real Electron/backend/IPC; local HTTP model fixture, synthetic loopback picture only; no company API/hardware/microphone/control"

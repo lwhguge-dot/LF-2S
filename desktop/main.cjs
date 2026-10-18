@@ -80,7 +80,7 @@ function validate(event) {
   )
     throw new Error("不允许的界面调用来源");
 }
-async function request(route, method = "GET", body, binary = false) {
+async function request(route, method = "GET", body, binary = false, requestHeaders = {}) {
   if (!base || serviceError) throw new Error(serviceError || "本地服务未就绪");
   // Native loopback HTTP bypasses machine/Chromium proxy configuration. No configurable destination.
   const rawAudio = Buffer.isBuffer(body);
@@ -100,10 +100,15 @@ async function request(route, method = "GET", body, binary = false) {
           Authorization: `Bearer ${token}`,
           ...(payload
             ? {
-                "Content-Type": rawAudio ? "audio/wav" : "application/json",
+                "Content-Type": route === "vision/analyze"
+                  ? "image/jpeg"
+                  : rawAudio
+                    ? "audio/wav"
+                    : "application/json",
                 "Content-Length": payload.length,
               }
             : {}),
+          ...requestHeaders,
         },
       },
       (res) => {
@@ -128,7 +133,9 @@ async function request(route, method = "GET", body, binary = false) {
       },
     );
     req.setTimeout(
-      binary === "real" ||
+      route === "bench/connect"
+        ? 25000
+        : binary === "real" ||
         route.startsWith("bench/") ||
         route.startsWith("fc-usb/")
         ? 12000
@@ -159,6 +166,7 @@ async function request(route, method = "GET", body, binary = false) {
       h["x-lf2s-camera-wait-ms"] === undefined
         ? null
         : Number(h["x-lf2s-camera-wait-ms"]);
+    const serviceReceived = Number(h["x-lf2s-service-received-ms"]);
     const validU64 = (s) =>
       typeof s === "string" &&
       /^[1-9][0-9]{0,19}$/.test(s) &&
@@ -184,6 +192,8 @@ async function request(route, method = "GET", body, binary = false) {
       frame > 0xffffffff ||
       !Number.isSafeInteger(epoch) ||
       epoch < 1 ||
+      !Number.isSafeInteger(serviceReceived) ||
+      serviceReceived < 1 ||
       ![width, height].every((v) => Number.isInteger(v) && v >= 1 && v <= 1600)
     )
       throw new Error("实物图像响应无效");
@@ -199,29 +209,46 @@ async function request(route, method = "GET", body, binary = false) {
       display_only: true,
       hardware_freshness_qualified: false,
       received_at: Date.now(),
+      service_received_ms: serviceReceived,
       roundtrip_ms: roundtrip,
       decode_ms: decode,
       camera_wait_ms: cameraWait,
     };
   }
   const length = Number(response.headers["content-length"]);
+  const serviceReceived = Number(
+    response.headers["x-lf2s-service-received-ms"],
+  );
+  const frame = Number(response.headers["x-lf2s-frame-id"]);
+  const stream = response.headers["x-lf2s-stream-id"];
+  const validU64 = (value) =>
+    typeof value === "string" &&
+    /^[1-9][0-9]{0,19}$/.test(value) &&
+    BigInt(value) < 1n << 64n;
   if (
     !Number.isInteger(length) ||
     length < 4 ||
     length > 1024 * 1024 ||
     response.headers["content-type"] !== "image/jpeg" ||
-    response.headers["x-lf2s-synthetic"] !== "1"
+    response.headers["x-lf2s-synthetic"] !== "1" ||
+    !Number.isInteger(frame) ||
+    frame < 1 ||
+    frame > 0xffffffff ||
+    !validU64(stream) ||
+    !Number.isSafeInteger(serviceReceived) ||
+    serviceReceived < 1
   )
     throw new Error("合成图像响应无效");
   const bytes = new Uint8Array(response.body);
   if (bytes.length !== length) throw new Error("合成图像不完整");
   return {
     bytes,
-    frame_id: Number(response.headers["x-lf2s-frame-id"]),
-    stream_id: response.headers["x-lf2s-stream-id"],
+    frame_id: frame,
+    stream_id: stream,
     synthetic: true,
     hardware_freshness_qualified: false,
     received_at: Date.now(),
+    service_received_ms: serviceReceived,
   };
 }
 
@@ -504,6 +531,70 @@ async function boot() {
     validate(event);
     return request("image", "GET", undefined, true);
   });
+  ipcMain.handle("station:visionAnalyze", (event, capture) => {
+    validate(event);
+    if (
+      !capture ||
+      !(capture.bytes instanceof Uint8Array) ||
+      capture.bytes.byteLength < 4 ||
+      capture.bytes.byteLength > 1024 * 1024 ||
+      capture.bytes[0] !== 0xff ||
+      capture.bytes[1] !== 0xd8 ||
+      capture.bytes.at(-2) !== 0xff ||
+      capture.bytes.at(-1) !== 0xd9
+    )
+      throw new Error("当前工作台 JPEG 图像无效");
+    const source = capture.synthetic === true ? "synthetic" : "esp32_preview";
+    const frame = capture.frame_id;
+    const stream = capture.stream_id;
+    const validU64 = (value) =>
+      typeof value === "string" &&
+      /^[1-9][0-9]{0,19}$/.test(value) &&
+      BigInt(value) < 1n << 64n;
+    if (
+      !Number.isInteger(frame) ||
+      frame < 1 ||
+      frame > 0xffffffff ||
+      !validU64(stream) ||
+      !Number.isSafeInteger(capture.service_received_ms) ||
+      capture.service_received_ms < 1
+    )
+      throw new Error("当前工作台画面编号或接收时间无效");
+    const epoch = source === "synthetic" ? 0 : capture.epoch;
+    if (
+      source === "synthetic"
+        ? capture.capture_us !== undefined
+        : !Number.isSafeInteger(epoch) ||
+          epoch < 1 ||
+          typeof capture.capture_us !== "string" ||
+          !/^[1-9][0-9]{0,19}$/.test(capture.capture_us) ||
+          BigInt(capture.capture_us) >= 1n << 64n
+    )
+      throw new Error("当前工作台相机帧信息无效");
+    const headers = {
+      "X-LF2S-Source": source,
+      "X-LF2S-Frame-Id": String(frame),
+      "X-LF2S-Stream-Id": stream,
+      "X-LF2S-Epoch": String(epoch),
+      "X-LF2S-Service-Received-Ms": String(capture.service_received_ms),
+      ...(source === "esp32_preview"
+        ? { "X-LF2S-Capture-Us": capture.capture_us }
+        : {}),
+    };
+    return request(
+      "vision/analyze",
+      "POST",
+      Buffer.from(capture.bytes),
+      false,
+      headers,
+    );
+  });
+  ipcMain.handle("station:visionCancel", (event, requestId) => {
+    validate(event);
+    if (typeof requestId !== "string" || !/^[a-f0-9]{24}$/.test(requestId))
+      throw new Error("单帧观察编号无效");
+    return request("vision/cancel", "POST", { request_id: requestId });
+  });
   ipcMain.handle("station:benchConnect", (event, host, port) => {
     validate(event);
     if (
@@ -519,6 +610,9 @@ async function boot() {
   });
   for (const [name, route] of [
     ["benchDisconnect", "bench/disconnect"],
+    ["gatewayConnect", "gateway/connect"],
+    ["gatewayDisconnect", "gateway/disconnect"],
+    ["gatewayProfile", "gateway/profile"],
     ["benchFocus", "bench/focus"],
     ["fcUsbConnect", "fc-usb/connect"],
     ["fcUsbDisconnect", "fc-usb/disconnect"],

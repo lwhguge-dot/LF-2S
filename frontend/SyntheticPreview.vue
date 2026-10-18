@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { bridge, type State, type Capture } from "./bridge";
-const props = defineProps<{ state: State; ready: boolean }>();
-const emit = defineEmits<{ tools: [] }>();
+const props = defineProps<{
+  state: State;
+  ready: boolean;
+  analysisLocked?: boolean;
+}>();
+const emit = defineEmits<{
+  tools: [];
+  capture: [frame: Capture];
+}>();
 const url = ref("");
 const meta = ref<Capture | null>(null);
 const at = ref(0);
@@ -24,7 +31,10 @@ const context = computed(() =>
   [props.state.identity?.boot_id, props.state.identity?.session_id].join(":"),
 );
 const fresh = computed(
-  () => online.value && !!url.value && now.value - at.value < 2000,
+  () =>
+    online.value &&
+    !!url.value &&
+    (props.analysisLocked || now.value - at.value < 2000),
 );
 function clear() {
   epoch++;
@@ -34,7 +44,7 @@ function clear() {
   at.value = 0;
 }
 async function capture() {
-  if (busy.value || !online.value) return;
+  if (busy.value || !online.value || props.analysisLocked) return;
   const requestEpoch = epoch;
   const original = context.value;
   busy.value = true;
@@ -44,6 +54,7 @@ async function capture() {
       !alive ||
       requestEpoch !== epoch ||
       original !== context.value ||
+      props.analysisLocked ||
       !online.value
     )
       return;
@@ -55,6 +66,7 @@ async function capture() {
     meta.value = result;
     at.value = performance.now();
     error.value = "";
+    emit("capture", result);
   } catch (failure) {
     if (alive && requestEpoch === epoch) {
       clear();
@@ -68,6 +80,12 @@ watch([online, context], () => {
   clear();
   if (online.value) void capture();
 });
+watch(
+  () => props.analysisLocked,
+  (locked) => {
+    if (!locked && online.value) void capture();
+  },
+);
 onMounted(() => {
   timer = setInterval(() => {
     now.value = performance.now();

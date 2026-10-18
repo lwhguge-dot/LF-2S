@@ -16,6 +16,7 @@ from lf2s_protocol.wire import ProtocolError
 from PIL import Image
 
 MAX_JPEG = 262144
+CAMERA_STARTUP_WAIT_S = 20
 PRIVATE_NETWORKS = tuple(
     ipaddress.IPv4Network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
@@ -29,6 +30,10 @@ class TransportError(ProtocolError):
         self.code = code
         self.elapsed_ms = elapsed_ms
         self.os_error = os_error
+
+
+class CameraStarting(ProtocolError):
+    """Compatible HTTP firmware is running before the camera worker is ready."""
 
 
 def target(host, port):
@@ -161,7 +166,7 @@ def connection_request(connection, method, route, limit, session, generation):
         response.close()
         return response.status, headers, data
     except (OSError, http.client.HTTPException, TransportError) as exc:
-        code = "response_timeout" if expired.is_set() or isinstance(exc, TimeoutError) else (
+        code = "connection_interrupted" if session and not session.current(connection, generation) else "response_timeout" if expired.is_set() or isinstance(exc, TimeoutError) else (
             exc.code if isinstance(exc, TransportError) else "connection_interrupted"
         )
         raise TransportError(code, elapsed_ms=round((time.monotonic() - started) * 1000),
@@ -187,15 +192,22 @@ def health_data(headers, data):
         if not isinstance(health, dict):
             raise ValueError
         for field in ("simulation", "hardware_qualified", "flight_qualified", "control_forwarding",
-                      "uart_ready", "physical_freshness_qualified"):
+                      "physical_freshness_qualified"):
             if health[field] is not False:
                 raise ValueError
         if (health["protocol"] != VERSION or health["dialect_hash"] != str(DIALECT_HASH)
                 or not isinstance(health["firmware"], str)
                 or not re.fullmatch(r"0\.1\.[0-9]{1,3}", health["firmware"])
                 or int(health["firmware"].split(".")[2]) < 3
-                or health["sensor_pid"] != 0x5640 or health["calibration_id"] != 0
-                or health["camera_ready"] is not True):
+                or health["calibration_id"] != 0):
+            raise ValueError
+        if health["camera_ready"] is False and type(health.get("camera_error")) is int and health["camera_error"] == 0:
+            raise CameraStarting("板卡已联网，相机仍在启动")
+        if health["camera_ready"] is not True or health["sensor_pid"] != 0x5640:
+            raise ValueError
+        if type(health["uart_ready"]) is not bool or (
+            health["uart_ready"] and int(health["firmware"].split(".")[2]) < 7
+        ):
             raise ValueError
         unsigned(health["camera_stream_id"], 64, text=True, positive=True)
         for field in ("preview_width", "preview_height"):
@@ -210,7 +222,12 @@ def health_data(headers, data):
             unsigned(health[field], 53)
         if not 8 <= unsigned(health["jpeg_quality"], 8) <= 30:
             raise ValueError
-        unsigned(health["autofocus_error"], 32)
+        # esp_err_t is a signed int32; ESP_FAIL=-1 is a valid diagnostic,
+        # including while AF status cannot yet be read after a cold boot.
+        # It does not change camera readiness or grant any qualification.
+        af_error = health["autofocus_error"]
+        if type(af_error) is not int or not -(1 << 31) <= af_error < 1 << 31:
+            raise ValueError
         if int(health["firmware"].split(".")[2]) >= 5:
             if type(health["test_pattern"]) is not bool or unsigned(health["preview_colour"], 8) > 2:
                 raise ValueError
@@ -242,6 +259,8 @@ def health_data(headers, data):
                 raise ValueError
             if health["wifi_mode"] == "sta" and (rssi is None) != (channel is None):
                 raise ValueError
+    except CameraStarting:
+        raise
     except (ValueError, KeyError, TypeError, ProtocolError) as exc:
         raise ProtocolError("板卡协议或台架配置不匹配；需要兼容的 0.1.3 及以上相机台架固件") from exc
     # Only expose bounded, known diagnostics to the renderer.
@@ -385,8 +404,22 @@ class Esp32Bench:
         self.active = True
         self.phase = "connecting"
         self.request_id = 0
-        async with self.lock:
-            await self.read_health(self.epoch)
+        epoch = self.epoch
+        try:
+            async with self.lock, asyncio.timeout(CAMERA_STARTUP_WAIT_S):
+                while True:
+                    if epoch != self.epoch or not self.active:
+                        raise ProtocolError("实物连接已改变，结束相机启动等待")
+                    try:
+                        await self.read_health(epoch)
+                        break
+                    except CameraStarting:
+                        self.reason = "板卡已联网，正在等待相机启动"
+                        await asyncio.sleep(.25)
+        except TimeoutError as exc:
+            if epoch == self.epoch and self.active:
+                self.fail("相机启动等待超时；请检查板卡后断开并重新连接")
+            raise ProtocolError("相机启动等待超时") from exc
         self.journal.add("connection", "ESP32 实物台架已连接；仅图像和板卡诊断", source="esp32_bench", simulation=False)
         return self.snapshot()
 
@@ -401,6 +434,11 @@ class Esp32Bench:
             paired = expected_stream or self.paired_stream
             if paired and health["camera_stream_id"] != paired:
                 raise ProtocolError("摄像头启动代数已改变；请断开并重新连接")
+        except CameraStarting as exc:
+            if self.phase == "connecting" and self.paired_stream is None and expected_stream is None:
+                raise
+            self.fail("相机停止或正在重新启动；请断开后显式重连")
+            raise ProtocolError(self.reason) from exc
         except ProtocolError as exc:
             self.fail(str(exc))
             raise

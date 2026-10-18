@@ -1,5 +1,6 @@
 import asyncio
 import secrets
+import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -17,6 +18,9 @@ from service.journal import Journal
 from service.recordings import Recordings
 from service.text_tasks import TextTasks
 from service.voice import MAX_AUDIO_BYTES, Voice
+from service.vision import VisionObservations
+
+MAX_VISION_IMAGE_BYTES = 1024 * 1024
 
 
 class Scenario(BaseModel):
@@ -68,6 +72,11 @@ class TextInput(BaseModel):
     text: str = Field(min_length=1, max_length=512)
 
 
+class VisionCancel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    request_id: str = Field(min_length=24, max_length=24, pattern=r"^[a-f0-9]{24}$")
+
+
 def create_app(root, token, port, user_data):
     journal = Journal(user_data / "logs")
     recordings = Recordings(user_data / "recordings")
@@ -77,6 +86,7 @@ def create_app(root, token, port, user_data):
     usb_fc = FcUsbBench(journal, user_data / "logs")
     text_tasks = TextTasks(journal)
     voice = Voice(journal)
+    vision = VisionObservations(journal)
     mode_lock = asyncio.Lock()
     replay_frame = None
     replay_lock = asyncio.Lock()
@@ -87,7 +97,7 @@ def create_app(root, token, port, user_data):
     stream_id = str(secrets.randbits(64) | (1 << 63))
 
     def simulation_only():
-        if bench.active or usb_fc.active:
+        if bench.active or usb_fc.active or adapter.gateway is not None:
             raise ProtocolError(
                 "实物台架占用中；请先断开相机和飞控 USB，再使用模拟功能"
             )
@@ -99,6 +109,8 @@ def create_app(root, token, port, user_data):
                 await bench.refresh()
             except ProtocolError:
                 pass  # The provider bounds transient recovery and pins the paired stream.
+            if adapter.gateway is not None and bench.phase == "error":
+                adapter.require_reconnect("ESP32 配对或相机身份已失效；请断开后显式重连")
 
     @asynccontextmanager
     async def lifespan(app):
@@ -111,6 +123,7 @@ def create_app(root, token, port, user_data):
             try:
                 await voice.close()
                 await text_tasks.close()
+                await vision.close()
                 await usb_fc.disconnect()
             finally:
                 bench.disconnect()
@@ -127,6 +140,7 @@ def create_app(root, token, port, user_data):
     app.state.usb_fc = usb_fc
     app.state.text_tasks = text_tasks
     app.state.voice = voice
+    app.state.vision = vision
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
@@ -145,10 +159,19 @@ def create_app(root, token, port, user_data):
                 limit = (
                     MAX_AUDIO_BYTES
                     if request.url.path == "/api/v1/voice/transcribe"
+                    else MAX_VISION_IMAGE_BYTES
+                    if request.url.path == "/api/v1/vision/analyze"
                     else 4096
                 )
-                if int(request.headers.get("content-length", "0")) > limit:
+                length = int(request.headers.get("content-length", "0"))
+                if length > limit or (
+                    request.url.path == "/api/v1/vision/analyze" and length < 4
+                ):
                     return JSONResponse({"error": "请求过大"}, status_code=413)
+                if request.url.path == "/api/v1/vision/analyze" and request.headers.get(
+                    "content-type"
+                ) != "image/jpeg":
+                    return JSONResponse({"error": "只接受 JPEG 图像"}, status_code=415)
             except ValueError:
                 return JSONResponse({"error": "请求长度无效"}, status_code=400)
             if request.headers.get("transfer-encoding"):
@@ -183,13 +206,43 @@ def create_app(root, token, port, user_data):
             **adapter.snapshot(),
             "replay": replay_frame,
             "recording": recordings.stats(),
-            "mode": "replay" if adapter.replaying else "simulation",
+            "mode": "replay" if adapter.replaying else "uart_readonly" if adapter.gateway else "simulation",
+            "gateway": {
+                "active": adapter.gateway is not None,
+                "host": adapter.gateway.peer[0] if adapter.gateway else None,
+                "local_port": 12701,
+                "remote_port": 12700,
+            },
             "bench": bench.snapshot(),
             "usb_fc": usb_fc.snapshot(),
             "text_tasks": text_tasks.snapshot(),
             "voice": voice.snapshot(),
+            "vision": vision.snapshot(),
         }
-        if bench.active or usb_fc.active:
+        current_vision = vision.current
+        if current_vision:
+            frame = current_vision.get("frame") or {}
+            source = frame.get("source")
+            if source == "esp32_preview":
+                health = bench.snapshot().get("health")
+                if (
+                    adapter.replaying
+                    or bench.phase != "online"
+                    or frame.get("reset_seq") != bench.epoch
+                    or not health
+                    or frame.get("stream_id") != health.get("camera_stream_id")
+                ):
+                    await vision.invalidate("camera_context_changed")
+                    snapshot["vision"] = vision.snapshot()
+            elif source == "synthetic" and (
+                adapter.replaying
+                or bench.active
+                or usb_fc.active
+                or adapter.snapshot()["link"]["phase"] != "online"
+            ):
+                await vision.invalidate("image_source_unavailable")
+                snapshot["vision"] = vision.snapshot()
+        if (bench.active or usb_fc.active) and adapter.gateway is None:
             snapshot.update(
                 simulation=False,
                 read_only=True,
@@ -283,6 +336,7 @@ def create_app(root, token, port, user_data):
         async with mode_lock:
             if adapter.replaying:
                 raise ProtocolError("请先退出只读回放")
+            await vision.invalidate("hardware_bench_selected")
             adapter.disconnect()
             return await usb_fc.connect()
 
@@ -299,31 +353,112 @@ def create_app(root, token, port, user_data):
                 raise ProtocolError("请先退出只读回放")
             if bench.active or bench.lock.locked():
                 raise ProtocolError("请先断开 ESP32 实物台架")
+            await vision.invalidate("camera_connection_changed")
             adapter.disconnect()
             return await bench.connect(body.host, body.port)
 
     @app.post("/api/v1/bench/disconnect")
     async def bench_disconnect(body: EmptyBody | None = None):
         async with mode_lock:
+            await vision.invalidate("camera_disconnected")
+            if adapter.gateway is not None:
+                adapter.disconnect()
             return bench.disconnect()
+
+    @app.post("/api/v1/gateway/connect")
+    async def gateway_connect(body: EmptyBody | None = None):
+        async with mode_lock:
+            if adapter.replaying or usb_fc.active:
+                raise ProtocolError("请先退出回放并断开飞控 USB 观察，再连接 UART1")
+            if bench.phase != "online" or not bench.health or not bench.health.get("uart_ready"):
+                raise ProtocolError("请先连接 UART 已启用的 ESP32 实物相机台架")
+            if bench.health.get("control_forwarding") is not False:
+                raise ProtocolError("本轮仅支持控制转发关闭的只读网关固件")
+            if adapter.gateway is not None:
+                raise ProtocolError("请先断开 UART1 遥测，再建立新会话")
+            adapter.disconnect()
+            return await adapter.connect_gateway(bench.host)
+
+    @app.post("/api/v1/gateway/disconnect")
+    async def gateway_disconnect(body: EmptyBody | None = None):
+        async with mode_lock:
+            if adapter.gateway is None:
+                raise ProtocolError("真实 UART1 未连接")
+            return adapter.disconnect()
+
+    @app.post("/api/v1/gateway/profile")
+    async def gateway_profile(body: EmptyBody | None = None):
+        async with mode_lock:
+            if adapter.gateway is None or adapter.replaying:
+                raise ProtocolError("请先显式连接真实 UART1")
+            return await adapter.query_profile()
 
     @app.get("/api/v1/bench/preview")
     async def bench_preview():
         if adapter.replaying:
             raise ProtocolError("回放不读取实物图像")
         jpeg, headers = await bench.preview()
+        headers["X-LF2S-Service-Received-Ms"] = str(time.monotonic_ns() // 1_000_000)
         return Response(jpeg, media_type="image/jpeg", headers=headers)
+
+    @app.post("/api/v1/vision/analyze")
+    async def vision_analyze(request: Request):
+        source = request.headers.get("x-lf2s-source", "")
+        if source == "synthetic":
+            simulation_only()
+            if adapter.replaying or adapter.snapshot()["link"]["phase"] != "online":
+                raise ProtocolError("本机模拟图像当前不可用")
+        elif source == "esp32_preview":
+            if (
+                adapter.replaying
+                or not bench.active
+                or bench.phase != "online"
+                or bench.health is None
+            ):
+                raise ProtocolError("ESP32 实物相机当前不可用")
+        else:
+            raise ProtocolError("不支持的单帧图像来源")
+        try:
+            frame_id = request.headers["x-lf2s-frame-id"]
+            stream_id = request.headers["x-lf2s-stream-id"]
+            epoch = int(request.headers["x-lf2s-epoch"])
+            received_ms = int(request.headers["x-lf2s-service-received-ms"])
+            capture_us = request.headers.get("x-lf2s-capture-us")
+        except (KeyError, TypeError, ValueError):
+            raise ProtocolError("单帧图像关联信息不完整") from None
+        if source == "esp32_preview" and (
+            epoch != bench.epoch
+            or stream_id != bench.health["camera_stream_id"]
+        ):
+            raise ProtocolError("相机流已变化；请读取新画面后重新分析")
+        if source == "synthetic" and (epoch != 0 or capture_us is not None):
+            raise ProtocolError("本机模拟帧关联信息无效")
+        return vision.start(
+            await request.body(),
+            source=source,
+            frame_id=frame_id,
+            stream_id=stream_id,
+            epoch=epoch,
+            received_ms=received_ms,
+            capture_us=capture_us,
+        )
+
+    @app.post("/api/v1/vision/cancel")
+    async def vision_cancel(body: VisionCancel):
+        return await vision.cancel(body.request_id)
 
     @app.post("/api/v1/bench/focus")
     async def bench_focus(body: EmptyBody | None = None):
         if adapter.replaying:
             raise ProtocolError("回放禁止实物对焦")
+        await vision.invalidate("camera_focus_requested")
         return await bench.focus()
 
     @app.post("/api/v1/bench/settings")
     async def bench_settings(body: BoardSettings):
         if adapter.replaying:
             raise ProtocolError("回放禁止调整实物预览")
+        await vision.invalidate("camera_settings_changed")
         return await bench.settings(body.size, body.colour)
 
     @app.post("/api/v1/connect")
@@ -372,6 +507,7 @@ def create_app(root, token, port, user_data):
     async def replay_open(body: ReplayPosition):
         nonlocal replay_frame
         async with mode_lock, replay_lock:
+            await vision.invalidate("replay_opened")
             loaded = await asyncio.to_thread(
                 recordings.frame, body.recording_id, body.index
             )
@@ -458,6 +594,9 @@ def create_app(root, token, port, user_data):
                     "X-LF2S-Hardware-Qualified": "0",
                     "X-LF2S-Width": "960",
                     "X-LF2S-Height": "540",
+                    "X-LF2S-Service-Received-Ms": str(
+                        time.monotonic_ns() // 1_000_000
+                    ),
                 },
             )
 

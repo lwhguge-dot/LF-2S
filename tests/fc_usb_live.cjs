@@ -70,7 +70,11 @@ async function main() {
     });
     const page = await instance.firstWindow();
     page.on("pageerror", (error) => errors.push(String(error)));
-    await page.getByTestId("simulation-banner").waitFor();
+    await until(
+      async () => (await page.evaluate(() => window.lf2s.state())).service_ready,
+      "Local service did not become ready",
+    );
+    await page.getByTestId("workspace-tools").waitFor();
     fs.writeFileSync(
       path.join(out, `fc-usb-${suffix}-initial.yaml`),
       await page.locator("body").ariaSnapshot(),
@@ -276,9 +280,14 @@ async function main() {
       "disconnect_clears_values_and_history",
       state.usb_fc.attitude.value === null && state.usb_fc.history.length === 0,
     );
-    await page.screenshot({
-      path: path.join(out, `fc-usb-${suffix}-disconnected.png`),
-    });
+    try {
+      await page.screenshot({
+        path: path.join(out, `fc-usb-${suffix}-disconnected.png`),
+        timeout: 5000,
+      });
+    } catch (error) {
+      report.screenshot_warning = String(error).slice(0, 300);
+    }
     check("no_renderer_errors", errors.length === 0);
     report.passed = true;
   } catch (error) {

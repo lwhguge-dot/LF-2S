@@ -25,6 +25,8 @@ const connection = computed(() =>
     ? "本地服务不可用"
     : state.value.replay
       ? "只读回放"
+      : state.value.mode === "uart_readonly"
+        ? state.value.link?.phase === "online" ? "飞控 UART1 遥测在线" : "飞控 UART1 遥测待恢复"
       : state.value.bench?.active
         ? state.value.bench.phase === "online"
           ? "相机已连接"

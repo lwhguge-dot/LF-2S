@@ -2,8 +2,16 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { bridge, type RealCapture, type State } from "./bridge";
 
-const props = defineProps<{ state: State; serviceReady: boolean; embedded?: boolean }>();
-const emit = defineEmits<{ refresh: [state: State] }>();
+const props = defineProps<{
+  state: State;
+  serviceReady: boolean;
+  embedded?: boolean;
+  analysisLocked?: boolean;
+}>();
+const emit = defineEmits<{
+  refresh: [state: State];
+  capture: [frame: RealCapture];
+}>();
 const host = ref("");
 const port = ref(80);
 const busy = ref(false);
@@ -22,6 +30,23 @@ const imageURL = ref("");
 const imageMeta = ref<RealCapture | null>(null);
 const imageAt = ref(0);
 const now = ref(performance.now());
+const telemetryArrivedAt = ref(performance.now());
+watch(() => props.state, () => { telemetryArrivedAt.value = performance.now(); });
+const attitudeAvailable = computed(() => {
+  const attitude = props.state.sensors?.attitude;
+  const elapsed = now.value - telemetryArrivedAt.value;
+  return props.serviceReady && props.state.gateway?.active && props.state.link?.phase === "online" &&
+    elapsed + (props.state.link.state_age_ms ?? 1000) < 1000 &&
+    attitude?.source === "uart1" && attitude.valid && elapsed + (attitude.age_ms ?? 300) < 300;
+});
+const attitudeText = computed(() => {
+  const value = props.state.sensors?.attitude?.value;
+  return attitudeAvailable.value && Array.isArray(value)
+    ? value.map(v => `${(v * 180 / Math.PI).toFixed(1)}°`).join(" / ") : "未知";
+});
+function connectUart() { return run(() => bridge.gatewayConnect(), "UART1 握手已处理，请核对链路状态"); }
+function disconnectUart() { return run(() => bridge.gatewayDisconnect(), "UART1 已断开"); }
+function queryUartProfile() { return run(() => bridge.gatewayProfile(), "已查询飞控只读配置"); }
 let epoch = 0;
 let alive = true;
 let timer: ReturnType<typeof setInterval>;
@@ -44,7 +69,10 @@ const online = computed(
     bench.value?.phase === "online",
 );
 const fresh = computed(
-  () => online.value && !!imageURL.value && now.value - imageAt.value < 2000,
+  () =>
+    online.value &&
+    !!imageURL.value &&
+    (props.analysisLocked || now.value - imageAt.value < 2000),
 );
 const receivedFps = computed(() => {
   const recent = displayTimes.value.filter((t) => t >= now.value - 5000);
@@ -58,7 +86,9 @@ const settingsAvailable = computed(
 const focusText = computed(() =>
   !health.value?.autofocus_initialized
     ? "不可用"
-    : health.value.autofocus_focused
+    : health.value.autofocus_error
+      ? "对焦状态暂不可用"
+      : health.value.autofocus_focused
       ? "传感器报告已对焦"
       : health.value.autofocus_busy
         ? "传感器报告搜索中"
@@ -114,7 +144,7 @@ function disconnect() {
   return run(bridge.benchDisconnect, "已断开实物；需手动选择后续连接");
 }
 async function preview() {
-  if (reading.value || busy.value || !online.value) return;
+  if (reading.value || busy.value || !online.value || props.analysisLocked) return;
   const requestEpoch = epoch;
   const boardEpoch = bench.value?.epoch;
   reading.value = true;
@@ -126,6 +156,7 @@ async function preview() {
       !alive ||
       requestEpoch !== epoch ||
       !online.value ||
+      props.analysisLocked ||
       frame.epoch !== boardEpoch ||
       frame.stream_id !== health.value?.camera_stream_id
     )
@@ -141,7 +172,7 @@ async function preview() {
       URL.revokeObjectURL(url);
       throw new Error("浏览器无法解码这张 JPEG");
     }
-    if (!alive || requestEpoch !== epoch || !online.value) {
+    if (!alive || requestEpoch !== epoch || !online.value || props.analysisLocked) {
       URL.revokeObjectURL(url);
       return;
     }
@@ -150,6 +181,7 @@ async function preview() {
     imageMeta.value = frame;
     imageRequestStarted = requestStarted;
     imageAt.value = performance.now();
+    emit("capture", frame);
     message.value = "";
   } catch (error) {
     if (alive && requestEpoch === epoch) {
@@ -192,6 +224,13 @@ watch(
   () => {
     clearImage();
     if (online.value && auto.value) void preview();
+  },
+);
+watch(
+  () => props.analysisLocked,
+  (locked) => {
+    auto.value = !locked;
+    if (!locked && online.value) void preview();
   },
 );
 onMounted(() => {
@@ -401,6 +440,22 @@ onUnmounted(() => {
           {{ bench.reason }}
         </p>
         <p v-if="message" class="bench-note" role="status">{{ message }}</p>
+      </article>
+      <article class="panel" data-testid="uart1-telemetry">
+        <div class="panel-heading"><h2>飞控 UART1 遥测</h2><span class="chip">真实 · 只读</span></div>
+        <p>{{ state.gateway?.active ? state.link?.reason || `链路：${state.link?.phase}` : "相机连接后，可单独建立飞控遥测会话" }}</p>
+        <div class="connection-buttons">
+          <button :disabled="!online || busy || !!state.gateway?.active" @click="connectUart">连接 UART1 遥测</button>
+          <button :disabled="!serviceReady || busy || !state.gateway?.active" @click="disconnectUart">断开 UART1</button>
+          <button :disabled="!serviceReady || busy || !state.gateway?.active || state.link?.phase !== 'online'" @click="queryUartProfile">读取飞控配置</button>
+        </div>
+        <dl v-if="state.gateway?.active" data-testid="uart1-values">
+          <dt>姿态 · 横滚 / 俯仰 / 相对偏航</dt>
+          <dd>{{ attitudeText }}</dd>
+          <dt>启动 / 会话</dt><dd>{{ state.identity?.boot_id || '未知' }} / {{ state.identity?.session_id || '未知' }}</dd>
+          <dt>采样年龄</dt><dd>{{ attitudeAvailable ? `${state.sensors?.attitude?.age_ms} ms` : '未知' }}</dd>
+        </dl>
+        <p>高度、定位和电压尚未核实的项目保持未知。这里只读取数据，飞行动作关闭。</p>
       </article>
       <article class="panel bench-diagnostics">
         <div class="panel-heading">

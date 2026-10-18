@@ -7,6 +7,7 @@ a = Analysis([str(root / 'service/entry.py')],
              pathex=[str(root), str(root / 'protocol')],
              datas=[(str(root / 'package.json'), '.'),
                     (str(root / 'simulation/profile.json'), 'simulation'),
+                    (str(root / 'service/vision-policy.json'), 'service'),
                     (str(root / 'protocol/manifest.json'), 'protocol')],
              hiddenimports=collect_submodules('uvicorn'), excludes=['tkinter', 'pytest'],
              noarchive=False)

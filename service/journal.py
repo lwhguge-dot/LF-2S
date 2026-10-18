@@ -47,7 +47,7 @@ class Journal:
         }
         item = copy.deepcopy(item)
         self.history.append(item)
-        if self.recorder:
+        if self.recorder and item["simulation"]:
             self.recorder.add("event", item)
         record = logging.LogRecord(
             "lf2s",

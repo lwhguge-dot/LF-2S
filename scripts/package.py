@@ -4,6 +4,7 @@ import hashlib
 import argparse
 import json
 import shutil
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from licenses import collect
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = json.loads((ROOT / "package.json").read_text("utf-8"))["version"]
 PUBLIC_EVIDENCE = (
+    "frozen-backend-integrity.json",
+    "uart1-public-summary.json",
+    "uart1-hardware-summary.json",
     "workbench-public-summary.json",
     "workbench-package-idle.png",
     "workbench-package-road.png",
@@ -48,6 +52,41 @@ PUBLIC_EVIDENCE = (
     "voice-public-summary.json",
     "voice-package-review.png",
 )
+
+
+def verify_frozen_backend(executable):
+    """Read actual PYZ code; refuse stale PyInstaller analysis/cache output."""
+    from PyInstaller.archive.readers import CArchiveReader
+
+    def normalize(code):
+        return code.replace(
+            co_filename="<lf2s-source>",
+            co_consts=tuple(normalize(value) if isinstance(value, types.CodeType) else value
+                            for value in code.co_consts),
+        )
+
+    archive = CArchiveReader(str(executable))
+    pyz = archive.open_embedded_archive("PYZ.pyz")
+    modules = {}
+    for module in sorted(pyz.toc):
+        if not module.startswith(("service.", "simulation.", "lf2s_protocol.")):
+            continue
+        source = ROOT / ("protocol" if module.startswith("lf2s_protocol.") else "") / Path(*module.split("."))
+        source = source.with_suffix(".py") if source.with_suffix(".py").is_file() else source / "__init__.py"
+        if not source.is_file():
+            raise ValueError(f"Frozen application module has no current source: {module}")
+        data = source.read_bytes()
+        current = compile(data, "<lf2s-source>", "exec", dont_inherit=True, optimize=0)
+        if normalize(pyz.extract(module)) != normalize(current):
+            raise ValueError(f"Frozen backend differs from current source: {module}; rebuild with PyInstaller --clean")
+        modules[module] = hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
+    if not {"service.adapter", "service.esp32", "service.gateway", "service.app"} <= modules.keys():
+        raise ValueError("Required live UART1 modules are absent from the frozen backend")
+    report = {"version": VERSION, "passed": True, "modules": modules,
+              "scope": "Actual bundled Python code compared with current source; no physical hardware acceptance"}
+    (ROOT / "evidence/frozen-backend-integrity.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", "utf-8")
+    return report
 
 
 def source_inputs():
@@ -110,7 +149,7 @@ def manifest(destination):
     manifest = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "version": VERSION,
-        "scope": "Visual task workbench and non-thinking text suggestions, Mandarin review, vendor FC USB and ESP32 benches; S0–S2 simulation/replay; no live vision, company ASR deployment, human Mandarin, UART/control or flight acceptance",
+        "scope": "UART1 read-only telemetry and explicit single-frame observation workbench; S0–S2 simulation/replay, Mandarin review and display benches; physical runs listed in evidence, no control or flight acceptance",
         "directory": destination.name,
         "source_sha256_lf": source_inputs(),
         "files": [],
@@ -164,9 +203,11 @@ def main():
             raise ValueError(
                 "Source inputs changed; rebuild the package before refreshing documents"
             )
+        verify_frozen_backend(destination / "resources/backend/lf2s-service.exe")
         update_documents(destination)
         manifest(destination)
         return
+    verify_frozen_backend(ROOT / "build/backend/lf2s-service/lf2s-service.exe")
     destination = ROOT / f"release/LF2S-Station-{VERSION}-win-x64"
     if destination.exists():
         # Never remove a potentially running/user-owned directory; keep earlier builds reviewable.

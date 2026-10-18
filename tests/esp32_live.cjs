@@ -5,7 +5,8 @@ const crypto = require("node:crypto");
 const { _electron } = require("playwright");
 const root = path.resolve(__dirname, "..");
 const packaged = process.argv.includes("--packaged");
-const suffix = packaged ? "package" : "dev";
+const readOnly = process.argv.includes("--read-only");
+const suffix = `${packaged ? "package" : "dev"}${readOnly ? "-readonly" : ""}`;
 const boardHost = process.env.LF2S_ESP32_HOST || "192.168.4.1";
 const output = path.join(root, "evidence");
 const report = {
@@ -16,8 +17,9 @@ const report = {
   physical_esp32: true,
   transport: "serialized_http_keepalive",
   hardware_control_allowed: false,
-  scope:
-    "Paired ESP32 HTTP diagnostics, JPEG display and focus request; no STM32 or flight",
+  scope: readOnly
+    ? "Read-only ESP32 HTTP diagnostics and physical JPEG display; no camera commands, STM32 or flight"
+    : "Paired ESP32 HTTP diagnostics, JPEG display and focus request; no STM32 or flight",
   checks: [],
 };
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -153,18 +155,22 @@ async function main() {
       (await page.getByTestId("bench-banner").innerText()).includes("真实图像"),
     );
     await page.getByLabel("连续预览", { exact: true }).uncheck();
-    await until(
-      async () =>
-        !(await page
-          .getByRole("button", { name: "重新对焦", exact: true })
-          .isDisabled()),
-      "focus_not_available",
-    );
-    await page.getByRole("button", { name: "重新对焦", exact: true }).click();
-    await page
-      .getByText("重新对焦请求已接受；请观察画面与传感器状态", { exact: true })
-      .waitFor();
-    check("focus_acceptance_is_distinct_from_completion", true);
+    if (!readOnly) {
+      await until(
+        async () =>
+          !(await page
+            .getByRole("button", { name: "重新对焦", exact: true })
+            .isDisabled()),
+        "focus_not_available",
+      );
+      await page.getByRole("button", { name: "重新对焦", exact: true }).click();
+      await page
+        .getByText("重新对焦请求已接受；请观察画面与传感器状态", {
+          exact: true,
+        })
+        .waitFor();
+      check("focus_acceptance_is_distinct_from_completion", true);
+    }
     const frames = [];
     const started = performance.now();
     // Same backend/IPC route as the UI; no renderer network access.
@@ -201,7 +207,7 @@ async function main() {
     report.elapsed_ms = Math.round(performance.now() - started);
     await page.getByLabel("连续预览", { exact: true }).check();
     await page.getByTestId("real-image").waitFor({ timeout: 7000 });
-    if (Number(state.bench.health.firmware.split(".")[2]) >= 5) {
+    if (!readOnly && Number(state.bench.health.firmware.split(".")[2]) >= 5) {
       const before = (await page.evaluate(() => window.lf2s.state())).bench
         .health.camera_stream_id;
       await page.getByLabel("画面尺寸", { exact: true }).selectOption("qvga");
@@ -272,6 +278,39 @@ async function main() {
           /\d+(\.\d+)? FPS/.test(report.preview_metrics) &&
           /\d+ ms/.test(report.preview_metrics),
       );
+    }
+    if (readOnly) {
+      await page.getByTestId("workspace-return").click();
+      await page.getByTestId("workbench").waitFor();
+      await page.getByTestId("real-image").waitFor({ timeout: 10000 });
+      const workbenchState = await page.evaluate(() => window.lf2s.state());
+      const primaryImage = await page
+        .getByTestId("real-image")
+        .evaluate((img) => ({
+          complete: img.complete,
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        }));
+      check(
+        "physical_camera_is_displayed_in_primary_workbench",
+        workbenchState.mode === "esp32_bench" &&
+          workbenchState.simulation === false &&
+          workbenchState.bench?.phase === "online" &&
+          primaryImage.complete &&
+          primaryImage.width === workbenchState.bench.health.preview_width &&
+          primaryImage.height === workbenchState.bench.health.preview_height,
+      );
+      report.primary_workbench = {
+        mode: workbenchState.mode,
+        simulation: workbenchState.simulation,
+        phase: workbenchState.bench.phase,
+        frame_id: await page.getByTestId("real-frame").innerText(),
+        ...primaryImage,
+      };
+      await page.getByTestId("workspace-tools").click();
+      await page
+        .getByRole("button", { name: "ESP32 实物台架", exact: false })
+        .click();
     }
     await page.screenshot({
       path: path.join(output, `esp32-${suffix}-live.png`),

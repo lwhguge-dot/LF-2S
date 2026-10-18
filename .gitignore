@@ -36,3 +36,6 @@ evidence/*
 !evidence/design-comparison-package.png
 !evidence/design-comparison-mobile.png
 !evidence/design-detail-package-*.png
+!evidence/uart1-public-summary.json
+!evidence/uart1-hardware-summary.json
+!evidence/frozen-backend-integrity.json

@@ -3,7 +3,7 @@ export interface Sensor {
   value: number | number[] | null;
   age_ms: number | null;
   reason: string | null;
-  source: "synthetic" | "unavailable";
+  source: "synthetic" | "unavailable" | "uart1";
   unit: string;
 }
 export interface WireMessage {
@@ -32,7 +32,8 @@ export interface Operation {
 export interface State {
   controller?: ControllerStatus;
   simulation: boolean;
-  mode?: "simulation" | "esp32_bench" | "hardware_bench" | "replay";
+  mode?: "simulation" | "esp32_bench" | "hardware_bench" | "uart_readonly" | "replay";
+  gateway?: {active: boolean; host: string | null; local_port: number; remote_port: number};
   bench?: Bench;
   usb_fc?: FcUsb;
   text_tasks?: TextTasks;
@@ -48,6 +49,7 @@ export interface State {
   };
   replay?: ReplayFrame | null;
   recording?: Recording;
+  vision?: Vision;
   service_ready: boolean;
   service_error?: string;
   service_pid?: number;
@@ -114,6 +116,7 @@ export interface Capture {
   synthetic: true;
   hardware_freshness_qualified: false;
   received_at: number;
+  service_received_ms: number;
 }
 export interface TaskRun {
   task_id: number;
@@ -203,10 +206,28 @@ export interface RealCapture {
   display_only: true;
   hardware_freshness_qualified: false;
   received_at: number;
+  service_received_ms: number;
   roundtrip_ms: number;
   decode_ms: number;
   camera_wait_ms: number | null;
 }
+export type VisionCapture =
+  | {
+      bytes: Uint8Array;
+      frame_id: number;
+      stream_id: string;
+      synthetic: true;
+      service_received_ms: number;
+    }
+  | {
+      bytes: Uint8Array;
+      frame_id: number;
+      stream_id: string;
+      synthetic: false;
+      service_received_ms: number;
+      epoch: number;
+      capture_us: string;
+    };
 export interface UsbMeasurement {
   available: boolean;
   received_age_ms: number | null;
@@ -334,6 +355,73 @@ export interface TextTasks {
     } | null;
   } | null;
 }
+export interface VisionSignal {
+  box: [number, number, number, number];
+  light: "red" | "yellow" | "green" | "off" | "ambiguous" | "unknown";
+}
+export interface VisionObservation {
+  phase: string;
+  reason: string | null;
+  frame: {
+    source: "synthetic" | "esp32_preview";
+    frame_id: string;
+    stream_id: string;
+    session_id: string;
+    reset_seq: number | null;
+    source_capture_us: string | null;
+    received_ms: number;
+    image_sha256: string;
+  } | null;
+  model_elapsed_ms?: number;
+  provider_error?: string;
+  current_light: VisionSignal["light"] | null;
+  signals: VisionSignal[];
+  temporal: {
+    evidence: string;
+    samples: number;
+    span_ms: number;
+    green_off_transitions: number;
+  } | null;
+  zebra_visible: boolean | null;
+  checkout_visible: boolean | null;
+  currency: {
+    scope: string;
+    provisional: true;
+    reason: string;
+    visible_count: number | null;
+    recognized_count: number | null;
+    recognized_subtotal_fen: number | null;
+    visible_total_fen: number | null;
+    denomination_breakdown: { denomination_fen: number; count: number }[];
+    scene_total_fen: null;
+    physical_accuracy_verified: false;
+  } | null;
+  reported_currency?: {
+    visible_notes_complete: boolean | null;
+    notes: { box: number[]; denomination_fen: number | null }[];
+  };
+  crossing_allowed: false;
+  hardware_control_allowed: false;
+  physical_accuracy_verified: false;
+}
+export interface Vision {
+  configured: boolean;
+  configuration_error: string | null;
+  model: "qwen38" | null;
+  thinking_enabled: false;
+  running: boolean;
+  timeout_ms: number;
+  hardware_control_allowed: false;
+  crossing_allowed: false;
+  physical_accuracy_verified: false;
+  current: {
+    request_id: string;
+    phase: "pending" | "ready" | "error";
+    frame: VisionObservation["frame"];
+    observation: VisionObservation;
+    error: string | null;
+  } | null;
+}
 export interface TaskPresentation {
   current: TextTasks["current"];
   status: string;
@@ -364,8 +452,13 @@ export interface DesktopBridge {
   replayClose(): Promise<unknown>;
   scenario(name: string): Promise<unknown>;
   image(): Promise<Capture>;
+  visionAnalyze(capture: VisionCapture): Promise<Vision>;
+  visionCancel(requestId: string): Promise<Vision>;
   benchConnect(host: string, port: number): Promise<Bench>;
   benchDisconnect(): Promise<Bench>;
+  gatewayConnect(): Promise<Operation>;
+  gatewayDisconnect(): Promise<unknown>;
+  gatewayProfile(): Promise<Operation>;
   fcUsbConnect(): Promise<FcUsb>;
   fcUsbDisconnect(): Promise<FcUsb>;
   textParse(text: string): Promise<TextTasks>;

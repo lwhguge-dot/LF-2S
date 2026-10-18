@@ -1,0 +1,83 @@
+{
+  "application_version": "0.9.0",
+  "timestamp": "2026-10-18T20:47:35.184956+08:00",
+  "scope": "Physical USB-powered propeller-off UART1 read-only bench; no battery, optical calibration, control or flight acceptance",
+  "firmware_version": "0.2.0",
+  "elf_sha256": "6f6ef60f374a2e87271a5aa18175d729b9b194ab8b160b9c5bb0fb454491bccd",
+  "deployment_readback_verified": true,
+  "calibration_preserved": true,
+  "orientation": {
+    "passed": true,
+    "nose_up_positive_pitch": true,
+    "right_down_positive_roll": true,
+    "angle_calibrated": false,
+    "yaw_verified": false
+  },
+  "concurrent_camera_and_attitude": {
+    "seconds": 332.6560000000027,
+    "snapshots": 2982,
+    "fresh_attitude_snapshots": 2202,
+    "unknown_attitude_snapshots": 780,
+    "link_phases": {
+      "online": 2974,
+      "stale": 8
+    },
+    "camera_frames": 323,
+    "camera_errors": 0,
+    "esp_counter_delta": {
+      "uart_frames": 7063,
+      "uart_errors": 0,
+      "uart_rejected": 0,
+      "uart_submitted": 569
+    }
+  },
+  "cold_power_cycle": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "power_loss_invalidates_current_attitude",
+        "passed": true
+      },
+      {
+        "name": "new_boot_does_not_auto_adopt_old_session",
+        "passed": true
+      },
+      {
+        "name": "disconnect_clears_old_boot_and_session",
+        "passed": true
+      },
+      {
+        "name": "persistent_boot_id_increases_after_true_power_cycle",
+        "passed": true
+      },
+      {
+        "name": "new_boot_has_new_explicit_session",
+        "passed": true
+      },
+      {
+        "name": "fresh_real_attitude_returns_readonly",
+        "passed": true
+      },
+      {
+        "name": "configuration_query_recovers_after_new_session",
+        "passed": true
+      },
+      {
+        "name": "camera_and_uart1_resume_together",
+        "passed": true
+      },
+      {
+        "name": "no_renderer_errors",
+        "passed": true
+      }
+    ],
+    "before_boot_id": "1190167376",
+    "after_boot_id": "1190167377",
+    "explicit_reconnect": true,
+    "initial_camera_ready": false,
+    "bounded_camera_startup_wait_observed": true
+  },
+  "initial_failed_cycle_retained": true,
+  "hardware_control_allowed": false,
+  "flight_qualified": false
+}

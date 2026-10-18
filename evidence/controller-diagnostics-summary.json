@@ -1,5 +1,5 @@
 {
-  "application_version": "0.8.1",
+  "application_version": "0.9.0",
   "scope": "Current protocol report display; saved85C byte ingress and real Electron simulation UI, no physical UART/control",
   "backend_regressions": 14,
   "saved_C_scenarios": 2,
@@ -14,18 +14,18 @@
     "live_controller_diagnostics_do_not_reuse_historical_replay_state"
   ],
   "old_report_cleared_on_stale_block_reboot_replay_bench_or_service_failure": true,
-  "no_new_hardware_or_action_transport": true,
+  "diagnostic_display_has_no_control_output": true,
   "source_sha256_lf": {
     "service/controller.py": "1a441cf232b328da66824d0f2a0fbbb2e5b45e4b91175479e0c803d1686c3fc7",
-    "service/adapter.py": "2af50f7ac757bcb991fec95064402b5703e903e71927ae4b83e674738d88789e",
-    "service/app.py": "63ce4ef5a2a4ed5293194a203935d521f108bc176546c13ddeef0f3f0e5dd268",
+    "service/adapter.py": "e6f601d2f4319c7c807cfdbd797102a6affe18faff9e63b1c66370c0aca64e68",
+    "service/app.py": "6ce31ed0b07b47449481f5d44d1c4e9d364b14972c3c6b8d54355afd30a3e827",
     "frontend/ControllerPanel.vue": "e716f31f2a4343841819abfd57b5f0fb9f0970a7f30cc09ffdfdb71526d9faab",
-    "frontend/App.vue": "9505561795e8ea9cb2b0c526ec9d8563884c2f6de19a51a9686f52c30cfad87b",
-    "frontend/bridge.ts": "3563cc361a0bed33867450ca0dc1555bbaa73b8031995fd56a23e03801763421",
+    "frontend/App.vue": "97a5fb2b2c5185009186d740596a02eb69a98a62028b2d50b712755b88347fa3",
+    "frontend/bridge.ts": "3c6af804e74feda4eb6c83bd1ae5dbaa59b408da01a2a53bc5f2ec3c98c2f5ce",
     "tests/test_controller.py": "bba127d8926e7e9b1c73e408d4a8be9b2ac26a53e953b22e1c4a2e9028f3627b",
-    "tests/desktop.cjs": "76b64ec5d15ae7375eb32178edb658086580066cca9c28faaeecc83a379f3f63",
+    "tests/desktop.cjs": "2d78715d75ed3be44850288b6f27874085c53e3314820c3e3b4fbf7d30d5bbe6",
     "tests/s2_desktop.cjs": "ec64ad37a70986926f21fa362a9d4c05893fade3c433a13da307b9052921e548",
     "tests/fixtures/fc-estimator-fault-arm.json": "04dbef20a6602b9ab366bb271a2b5b8007f23d1181e24d1847043cb943a69670",
-    "package.json": "5656919eec046f30f291b2767698f6aba817ebf2220be0aba70c2780875b755e"
+    "package.json": "900026690c73bf83bee272a29af53f7449322446bfe16a101b6697a29fc8157e"
   }
 }

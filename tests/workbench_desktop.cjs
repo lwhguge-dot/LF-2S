@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
+const crypto = require("node:crypto");
 const root = path.resolve(__dirname, "..");
 const { _electron } = require("playwright");
 const packaged = process.argv.includes("--packaged");
@@ -47,14 +48,60 @@ function value(intent, target) {
   };
 }
 let held = null;
+let heldVision = null;
+let holdVisionNext = false;
 const model = http.createServer((req, res) => {
   const chunks = [];
   req.on("data", (c) => chunks.push(c));
   req.on("end", () => {
     try {
       const body = JSON.parse(Buffer.concat(chunks));
-      const text = body.messages.at(-1).content;
+      const content = body.messages.at(-1).content;
+      if (Array.isArray(content)) {
+        const imageURL = content.find((item) => item.type === "image_url")
+          ?.image_url?.url;
+        const image = Buffer.from((imageURL || "").split(",").at(-1), "base64");
+        requests.push({
+          kind: "vision",
+          model: body.model,
+          thinking: body.chat_template_kwargs.enable_thinking,
+          image_sha256: crypto.createHash("sha256").update(image).digest("hex"),
+          image_bytes: image.length,
+        });
+        const observation = {
+          signals: [],
+          zebra_visible: true,
+          checkout_visible: false,
+          currency: { visible_notes_complete: null, notes: [] },
+        };
+        const send = () => {
+          if (res.destroyed) return;
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              model: "qwen38",
+              choices: [
+                {
+                  finish_reason: "stop",
+                  message: {
+                    role: "assistant",
+                    content: JSON.stringify(observation),
+                    reasoning_content: null,
+                  },
+                },
+              ],
+            }),
+          );
+        };
+        if (holdVisionNext) {
+          holdVisionNext = false;
+          heldVision = send;
+        } else send();
+        return;
+      }
+      const text = content;
       requests.push({
+        kind: "text",
         text,
         model: body.model,
         thinking: body.chat_template_kwargs.enable_thinking,
@@ -84,7 +131,8 @@ const model = http.createServer((req, res) => {
       };
       if (text === "请去路边过马路") held = send;
       else send();
-    } catch {
+    } catch (error) {
+      errors.push({ kind: "model_fixture_parse", error: String(error) });
       res.writeHead(400);
       res.end();
     }
@@ -322,6 +370,104 @@ const model = http.createServer((req, res) => {
           "模拟图像 · 非实拍",
         ),
     );
+    holdVisionNext = true;
+    await page.getByTestId("vision-analyze").click();
+    try {
+      await until(() => heldVision !== null, "held frame-observation request");
+    } catch (error) {
+      const current = await state(page);
+      const alerts = await page.getByRole("alert").allInnerTexts();
+      throw new Error(
+        `${error.message}; vision=${JSON.stringify(current.vision)}; ` +
+          `button_disabled=${await page.getByTestId("vision-analyze").isDisabled()}; ` +
+          `alerts=${JSON.stringify(alerts)}`,
+      );
+    }
+    await until(
+      async () => (await state(page)).vision.current?.phase === "pending",
+      "pending single-frame observation",
+    );
+    await page.getByTestId("vision-frame-image").waitFor();
+    check(
+      "explicit_analysis_sends_only_the_selected_synthetic_jpeg",
+      requests.at(-1).kind === "vision" &&
+        requests.at(-1).image_bytes > 4 &&
+        requests.at(-1).model === "qwen38" &&
+        requests.at(-1).thinking === false &&
+        (await page.getByTestId("vision-frame-image").count()) === 1,
+    );
+    await page.getByTestId("vision-cancel").click();
+    await until(
+      async () => (await state(page)).vision.current === null,
+      "cancelled observation cleared",
+    );
+    heldVision();
+    heldVision = null;
+    await pause(200);
+    check(
+      "cancelled_model_reply_cannot_restore_observation",
+      (await state(page)).vision.current === null &&
+        (await page.getByTestId("vision-review").count()) === 0,
+    );
+    await until(
+      async () =>
+        !(await page.getByTestId("vision-analyze").isDisabled()),
+      "fresh synthetic frame after cancelling analysis",
+    );
+    await page.evaluate(() => {
+      window.__lf2sTestBlobs = new Map();
+      const createObjectURL = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (blob) => {
+        const url = createObjectURL(blob);
+        window.__lf2sTestBlobs.set(url, blob);
+        return url;
+      };
+    });
+    await page.getByTestId("vision-analyze").click();
+    await until(
+      async () => (await state(page)).vision.current?.phase === "ready",
+      "single-frame model observation",
+    );
+    const visual = await state(page);
+    const reviewedImageHash = await page.evaluate(async () => {
+      const img = document.querySelector('[data-testid="vision-frame-image"]');
+      const blob = window.__lf2sTestBlobs.get(img.src);
+      if (!blob) throw new Error("Frozen review image Blob is missing");
+      const bytes = await blob.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest), (v) =>
+        v.toString(16).padStart(2, "0"),
+      ).join("");
+    });
+    check(
+      "observation_hash_matches_model_input_and_frozen_display_frame",
+      visual.vision.current.frame.image_sha256 === reviewedImageHash &&
+        visual.vision.current.frame.image_sha256 ===
+          requests.filter((r) => r.kind === "vision").at(-1).image_sha256 &&
+        String(visual.vision.current.frame.frame_id) ===
+          (await page.getByTestId("vision-frame-id").innerText()),
+    );
+    check(
+      "model_observation_is_visibly_unverified_and_has_no_action_permission",
+      (await page.getByTestId("vision-status").innerText()) === "待人工核对" &&
+        (await page.getByTestId("vision-review").innerText()).includes(
+          "本机合成 · 非实拍",
+        ) &&
+        (await page.getByTestId("vision-review").innerText()).includes(
+          "许可：无",
+        ) &&
+        visual.vision.current.observation.crossing_allowed === false &&
+        visual.vision.current.observation.hardware_control_allowed === false,
+    );
+    await page.screenshot({
+      path: path.join(root, "evidence", `workbench-${suffix}-vision.png`),
+      fullPage: true,
+    });
+    await page.getByTestId("vision-resume").click();
+    await until(
+      async () => (await state(page)).vision.current === null,
+      "new frame invalidates previous observation",
+    );
     await page.getByTestId("text-task-source").fill("现在去到B点");
     await page.getByTestId("text-task-parse").click();
     await until(
@@ -381,9 +527,20 @@ const model = http.createServer((req, res) => {
     report.passed = true;
   } catch (error) {
     report.error = error.stack;
+    if (app) {
+      try {
+        const failedPage = await app.firstWindow();
+        report.failure_state = await state(failedPage);
+        report.failure_text = await failedPage.locator("body").innerText();
+        await failedPage.screenshot({ path: path.join(root, "evidence", `workbench-${suffix}-failure.png`), fullPage: true });
+      } catch (diagnosticError) {
+        report.diagnostic_error = String(diagnosticError);
+      }
+    }
     throw error;
   } finally {
     if (held) held();
+    if (heldVision) heldVision();
     if (app) await app.close().catch(() => {});
     await new Promise((r) => model.close(r));
     fs.writeFileSync(

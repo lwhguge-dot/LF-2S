@@ -1,0 +1,8 @@
+{
+  "max_receipt_age_ms": 35000,
+  "request_timeout_ms": 30000,
+  "max_sample_gap_ms": 2000,
+  "green_run_ms": 6000,
+  "signal_match_iou_millionths": 500000,
+  "denominations_fen": [100, 500, 1000, 2000, 5000, 10000]
+}

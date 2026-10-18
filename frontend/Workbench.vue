@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import type { State, TaskPresentation } from "./bridge";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  bridge,
+  type Capture,
+  type RealCapture,
+  type State,
+  type TaskPresentation,
+  type VisionCapture,
+} from "./bridge";
 import BenchPanel from "./BenchPanel.vue";
 import TextTasksPanel from "./TextTasksPanel.vue";
 import TextResultPanel from "./TextResultPanel.vue";
@@ -19,7 +26,33 @@ const emit = defineEmits<{
   imageSource: [source: string];
 }>();
 const source = ref(props.initialImageSource || "camera");
-watch(source, (value) => emit("imageSource", value));
+const analysisLocked = ref(false);
+const currentCapture = ref<Capture | RealCapture | null>(null);
+const analysisImage = ref("");
+const visionError = ref("");
+const visionRequestId = ref("");
+const now = ref(Date.now());
+const telemetryAt = ref(Date.now());
+watch(() => props.state, () => { telemetryAt.value = Date.now(); });
+const uartAttitude = computed(() => {
+  const sensor = props.state.sensors?.attitude;
+  const elapsed = now.value - telemetryAt.value;
+  if (!props.ready || props.state.replay || props.state.link?.phase !== "online" ||
+      elapsed + (props.state.link.state_age_ms ?? 1000) >= 1000 ||
+      !sensor?.valid || sensor.source !== "uart1" || elapsed + (sensor.age_ms ?? 300) >= 300 ||
+      !Array.isArray(sensor.value)) return "未知";
+  return sensor.value.map(v => `${(v * 180 / Math.PI).toFixed(1)}°`).join(" / ");
+});
+const uartAgeText = computed(() => {
+  const sensor = props.state.sensors?.attitude;
+  return sensor?.source === "uart1" && sensor?.age_ms != null ? `${sensor.age_ms} ms` : "未知";
+});
+let clock: ReturnType<typeof setInterval>;
+watch(source, (value) => {
+  void clearVision();
+  currentCapture.value = null;
+  emit("imageSource", value);
+});
 const assistant = ref<InstanceType<typeof TextTasksPanel> | null>(null);
 const view = ref<TaskPresentation>({
   current: null,
@@ -59,9 +92,157 @@ const runningTask = computed(() =>
     ? props.state.task?.current
     : null,
 );
+const vision = computed(() => props.state.vision);
+const visionCurrent = computed(() => vision.value?.current || null);
+const visionObservation = computed(() => visionCurrent.value?.observation || null);
+const captureFresh = computed(
+  () =>
+    !!currentCapture.value &&
+    now.value - currentCapture.value.received_at >= 0 &&
+    now.value - currentCapture.value.received_at < 2000,
+);
+const cameraOnline = computed(() =>
+  source.value === "camera"
+    ? props.state.bench?.active === true && props.state.bench.phase === "online"
+    : props.state.link?.phase === "online" &&
+      !props.state.replay &&
+      !props.state.bench?.active &&
+      !props.state.usb_fc?.active,
+);
+const analysisStatus = computed(() =>
+  !vision.value?.configured
+    ? "模型未配置"
+    : vision.value.running
+      ? "正在观察"
+      : visionCurrent.value?.phase === "ready"
+        ? "待人工核对"
+        : visionCurrent.value?.phase === "error"
+          ? "观察不可用"
+          : "尚无结果",
+);
+const visualCurrency = computed(() => visionObservation.value?.currency || null);
+function moneyText(fen: number | null | undefined) {
+  return typeof fen === "number" ? `¥${(fen / 100).toFixed(2)}` : "未知";
+}
+const signalText = (light: string) =>
+  ({
+    red: "红灯",
+    yellow: "黄灯",
+    green: "绿灯",
+    off: "未亮",
+    ambiguous: "颜色不明确",
+    unknown: "未知",
+  })[light] || "未知";
+const visibleText = (value: boolean | null | undefined) =>
+  value === true ? "模型报告可见" : value === false ? "模型报告未见" : "未知";
+function captureKey(frame: Capture | RealCapture) {
+  return [frame.synthetic, frame.stream_id, frame.frame_id].join(":");
+}
+function visionCapture(frame: Capture | RealCapture): VisionCapture {
+  const common = {
+    bytes: Uint8Array.from(frame.bytes),
+    frame_id: frame.frame_id,
+    stream_id: frame.stream_id,
+    service_received_ms: frame.service_received_ms,
+  };
+  return frame.synthetic
+    ? { ...common, synthetic: true }
+    : {
+        ...common,
+        synthetic: false,
+        epoch: frame.epoch,
+        capture_us: frame.capture_us,
+      };
+}
+function receiveCapture(frame: Capture | RealCapture) {
+  if (analysisLocked.value) return;
+  const prior = currentCapture.value;
+  if (prior && captureKey(prior) !== captureKey(frame) && visionCurrent.value)
+    void clearVision();
+  currentCapture.value = frame;
+}
+function clearAnalysisImage() {
+  if (analysisImage.value) URL.revokeObjectURL(analysisImage.value);
+  analysisImage.value = "";
+}
+async function clearVision() {
+  const requestId = visionRequestId.value || visionCurrent.value?.request_id || "";
+  visionRequestId.value = "";
+  visionError.value = "";
+  clearAnalysisImage();
+  if (requestId && props.ready) {
+    try {
+      await bridge.visionCancel(requestId);
+    } catch {
+      /* A closed or restarted service has already discarded its observations. */
+    }
+  }
+}
+async function analyzeCurrentFrame() {
+  const frame = currentCapture.value;
+  if (!frame || !captureFresh.value || !cameraOnline.value || !vision.value?.configured)
+    return;
+  analysisLocked.value = true;
+  visionError.value = "";
+  clearAnalysisImage();
+  analysisImage.value = URL.createObjectURL(
+    new Blob([Uint8Array.from(frame.bytes).buffer], { type: "image/jpeg" }),
+  );
+  try {
+    const result = await bridge.visionAnalyze(visionCapture(frame));
+    const requestId = result.current?.request_id;
+    if (!requestId) throw new Error("后台没有接受当前图像");
+    visionRequestId.value = requestId;
+  } catch (error) {
+    analysisLocked.value = false;
+    clearAnalysisImage();
+    visionError.value = String(error).replace(/^Error: /, "");
+  }
+}
+async function cancelAnalysis() {
+  const requestId = visionRequestId.value || visionCurrent.value?.request_id;
+  if (requestId) await clearVision();
+  analysisLocked.value = false;
+}
+async function resumePreview() {
+  await clearVision();
+  analysisLocked.value = false;
+}
+watch(
+  [() => props.ready, () => props.active, () => !!props.state.replay, cameraOnline],
+  ([ready, active, replay, online]) => {
+    if (!ready || !active || replay || !online) {
+      void clearVision();
+      analysisLocked.value = false;
+      currentCapture.value = null;
+    }
+  },
+);
+watch(
+  [
+    () => props.state.bench?.epoch,
+    () => props.state.bench?.health?.camera_stream_id,
+    () => props.state.identity?.boot_id,
+    () => props.state.identity?.session_id,
+  ],
+  () => {
+    if (visionCurrent.value) {
+      void clearVision();
+      analysisLocked.value = false;
+      currentCapture.value = null;
+    }
+  },
+);
 function suggest(text: string) {
   assistant.value?.setSource(text);
 }
+onMounted(() => {
+  clock = setInterval(() => (now.value = Date.now()), 200);
+});
+onUnmounted(() => {
+  clearInterval(clock);
+  void clearVision();
+});
 </script>
 <template>
   <main class="workbench" data-testid="workbench">
@@ -84,6 +265,33 @@ function suggest(text: string) {
             >
               {{ source === "camera" ? "相机设置" : "模拟连接" }}
             </button>
+            <button
+              v-if="!analysisLocked"
+              class="button small analyze-button"
+              data-testid="vision-analyze"
+              :disabled="
+                !ready || !cameraOnline || !captureFresh || !vision?.configured
+              "
+              @click="analyzeCurrentFrame"
+            >
+              分析当前画面
+            </button>
+            <button
+              v-else-if="vision?.running"
+              class="button small"
+              data-testid="vision-cancel"
+              @click="cancelAnalysis"
+            >
+              取消分析
+            </button>
+            <button
+              v-else
+              class="button small"
+              data-testid="vision-resume"
+              @click="resumePreview"
+            >
+              继续实时画面
+            </button>
           </div>
         </div>
         <div v-if="state.replay" class="empty-camera replay-camera">
@@ -100,21 +308,34 @@ function suggest(text: string) {
           :service-ready="ready"
           embedded
           @refresh="emit('refresh', $event)"
+          :analysis-locked="analysisLocked"
+          @capture="receiveCapture"
         />
         <SyntheticPreview
           v-else-if="active"
           :state="state"
           :ready="ready"
+          :analysis-locked="analysisLocked"
           @tools="emit('tools', 'overview')"
+          @capture="receiveCapture"
         />
         <div class="camera-footer">
           <span>{{
             source === "camera" ? "前向安装待核实" : "合成来源 · 非实拍"
           }}</span
-          ><span>实时识别尚未接入</span>
+          ><span>单帧观察 · 显式触发</span>
         </div>
       </section>
-      <aside class="task-column">
+      <aside class="task-column" :class="{ 'uart-connected': state.gateway?.active }">
+        <section v-if="state.gateway?.active" class="task-card uart1-card" data-testid="workbench-uart1">
+          <div class="section-bar"><h2>飞控实时状态</h2><span class="subtle-label">UART1 · 只读</span></div>
+          <div class="uart1-body">
+            <p>{{ ready && state.link?.phase === 'online' ? '遥测在线' : '遥测待恢复' }} · 样本年龄 {{ uartAgeText }}</p>
+            <p>横滚 / 俯仰 / 相对偏航</p>
+            <strong data-testid="workbench-uart1-attitude">{{ uartAttitude }}</strong>
+            <small v-if="state.link?.reason">{{ state.link.reason }}</small>
+          </div>
+        </section>
         <section class="task-card" aria-labelledby="task-heading">
           <div class="section-bar">
             <h2 id="task-heading">当前任务</h2>
@@ -163,7 +384,7 @@ function suggest(text: string) {
         <section class="result-card" aria-labelledby="result-heading">
           <div class="section-bar">
             <h2 id="result-heading">识别结果</h2>
-            <span class="subtle-label">尚无有效结果</span>
+            <span class="subtle-label" data-testid="vision-status">{{ analysisStatus }}</span>
           </div>
           <div class="result-body">
             <dl v-if="resultFields.length" class="result-fields">
@@ -173,10 +394,82 @@ function suggest(text: string) {
               </div>
             </dl>
             <p v-else class="result-placeholder">结果会与对应画面一起出现。</p>
-            <p class="sample-note">相机显示与任务建议均不产生识别结果。</p>
+            <section
+              v-if="analysisImage && visionCurrent"
+              class="vision-review"
+              data-testid="vision-review"
+              aria-label="单帧图像观察结果"
+            >
+              <img
+                :src="analysisImage"
+                alt="与模型观察绑定的冻结相机帧"
+                data-testid="vision-frame-image"
+              />
+              <div class="vision-frame-label">
+                <strong data-testid="vision-frame-id">{{ visionCurrent.frame?.frame_id || "待关联" }}</strong>
+                <span>{{ visionCurrent.frame?.source === "synthetic" ? "本机合成 · 非实拍" : "ESP32 实拍显示" }}</span>
+              </div>
+              <p v-if="visionCurrent.phase === 'pending'" role="status">
+                正在分析这张画面，预览已暂停。
+              </p>
+              <template v-else-if="visionObservation?.phase === 'ready'">
+                <dl class="vision-fields">
+                  <div>
+                    <dt>信号灯</dt>
+                    <dd v-if="visionObservation.signals.length">
+                      <span v-for="(signal, index) in visionObservation.signals" :key="index">
+                        灯组 {{ index + 1 }}：{{ signalText(signal.light) }}
+                      </span>
+                    </dd>
+                    <dd v-else>未知（未报告可辨认灯组）</dd>
+                  </div>
+                  <div>
+                    <dt>闪烁</dt>
+                    <dd>单帧无法判断</dd>
+                  </div>
+                  <div>
+                    <dt>斑马线</dt>
+                    <dd>{{ visibleText(visionObservation.zebra_visible) }}</dd>
+                  </div>
+                  <div>
+                    <dt>收银台</dt>
+                    <dd>{{ visibleText(visionObservation.checkout_visible) }}</dd>
+                  </div>
+                  <template v-if="visualCurrency">
+                    <div>
+                      <dt>已识别纸币</dt>
+                      <dd>{{ visualCurrency.recognized_count ?? "未知" }} 张</dd>
+                    </div>
+                    <div>
+                      <dt>可见范围合计</dt>
+                      <dd>
+                        {{ moneyText(visualCurrency.visible_total_fen) }}
+                        <span v-if="visualCurrency.visible_total_fen !== null">· 暂定</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>柜台总额</dt>
+                      <dd>未知</dd>
+                    </div>
+                  </template>
+                </dl>
+                <p class="vision-evidence">
+                  qwen38 · {{ visionObservation.model_elapsed_ms ?? "—" }} ms ·
+                  许可：无 · 飞行动作：未连接
+                </p>
+              </template>
+              <p v-else role="alert">
+                观察不可用：{{ visionCurrent.error || visionObservation?.reason || "未知原因" }}
+                <span v-if="visionObservation?.provider_error">（{{ visionObservation.provider_error }}）</span>
+              </p>
+            </section>
+            <p v-if="visionError" role="alert">{{ visionError }}</p>
+            <p class="sample-note">
+              模型报告须人工核对；单帧结果不判断闪烁、通行许可或柜台总额。
+            </p>
           </div>
         </section>
-        <div class="status-strip">
+        <div class="status-strip" data-testid="workbench-connection-strip">
           <span
             >相机
             <b>{{
@@ -185,7 +478,9 @@ function suggest(text: string) {
           ><span
             >飞控
             <b>{{
-              ready && state.usb_fc?.phase === "online" ? "USB只读" : "未接入"
+              ready && state.gateway?.active
+                ? state.link?.phase === "online" ? "UART1只读" : "UART1待恢复"
+                : ready && state.usb_fc?.phase === "online" ? "USB只读" : "未接入"
             }}</b></span
           ><span
             >模型
@@ -238,6 +533,15 @@ function suggest(text: string) {
   color: #617b88;
   max-width: 125px;
 }
+.camera-actions {
+  flex-wrap: wrap;
+  justify-content: end;
+}
+.analyze-button:disabled {
+  cursor: not-allowed;
+  color: #8b989f;
+  background: #f4f6f7;
+}
 .camera-card :deep(.bench-embedded) {
   display: block;
 }
@@ -288,6 +592,14 @@ function suggest(text: string) {
 }
 .task-column {
   height: calc(var(--workspace-picture-height) + 134px);
+}
+.task-column .task-card {
+  flex: 0 1 45%;
+}
+.task-column .result-card {
+  flex: 1 1 55%;
+  min-height: 0;
+  overflow-y: auto;
 }
 .idle-task {
   padding: 21px;
@@ -362,7 +674,67 @@ function suggest(text: string) {
   overflow-y: auto;
 }
 .task-column .result-card {
-  overflow: hidden;
+  overflow-x: hidden;
+}
+.vision-review {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid #e7edef;
+}
+.vision-review > img {
+  display: block;
+  width: 100%;
+  max-height: 118px;
+  object-fit: contain;
+  background: #1c2930;
+  border-radius: 4px;
+}
+.vision-frame-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  color: #526a76;
+  font-size: 11px;
+}
+.vision-frame-label span {
+  color: #778994;
+  text-align: right;
+}
+.vision-review > p {
+  margin: 0;
+  color: #6b7d87;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.vision-fields {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.vision-fields > div {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.8fr) minmax(0, 1.2fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 11px;
+}
+.vision-fields dt {
+  color: #74848d;
+}
+.vision-fields dd {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  color: #304b59;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.vision-evidence {
+  color: #819099 !important;
+  font-size: 10px !important;
 }
 .workbench .button {
   color: #344d5c;
@@ -376,6 +748,10 @@ function suggest(text: string) {
   }
   .task-column {
     height: auto;
+  }
+  .task-column .task-card,
+  .task-column .result-card {
+    flex: initial;
   }
   .camera-actions {
     gap: 5px;
